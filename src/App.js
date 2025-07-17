@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
@@ -7,44 +7,214 @@ import {
   Container,
   Button,
   Box,
+  CssBaseline,
+  useMediaQuery,
+  IconButton,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  Divider,
+  styled,
+  Grid,
 } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import PeopleIcon from '@mui/icons-material/People';
+import WorkIcon from '@mui/icons-material/Work';
+import BookIcon from '@mui/icons-material/Book';
 
 import Dashboard from './pages/Dashboard';
 import Drivers from './pages/Drivers';
 import Jobs from './pages/Jobs';
 import Bookings from './pages/Bookings';
 
+// Custom styled components for consistent theming
+const GoldButton = styled(Button)(({ theme }) => ({
+  color: '#FFD700',
+  '&:hover': {
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+  },
+  '&.Mui-selected': {
+    fontWeight: 'bold',
+    borderBottom: '2px solid #FFD700'
+  }
+}));
+
+const navItems = [
+  { name: 'Dashboard', path: '/', icon: <DashboardIcon sx={{ color: '#FFD700' }} /> },
+  { name: 'Drivers', path: '/drivers', icon: <PeopleIcon sx={{ color: '#FFD700' }} /> },
+  { name: 'Jobs', path: '/jobs', icon: <WorkIcon sx={{ color: '#FFD700' }} /> },
+  { name: 'Bookings', path: '/bookings', icon: <BookIcon sx={{ color: '#FFD700' }} /> },
+];
+
+function NavBar() {
+  const isMobile = useMediaQuery('(max-width:900px)');
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const location = useLocation();
+
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
+
+  const drawer = (
+    <Box 
+      onClick={handleDrawerToggle}
+      sx={{ 
+        background: '#121212',
+        height: '100%',
+        color: '#FFD700'
+      }}
+    >
+      <Typography variant="h6" sx={{ my: 2, p: 2, color: '#FFD700' }}>
+        Luba Admin
+      </Typography>
+      <Divider sx={{ borderColor: 'rgba(255, 215, 0, 0.5)' }} />
+      <List>
+        {navItems.map((item) => (
+          <ListItem key={item.name} disablePadding>
+            <ListItemButton
+              component={Link}
+              to={item.path}
+              selected={location.pathname === item.path}
+              sx={{
+                color: '#FFD700',
+                '&.Mui-selected': {
+                  backgroundColor: 'rgba(255, 215, 0, 0.1)',
+                  fontWeight: 'bold'
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 215, 0, 0.05)'
+                }
+              }}
+            >
+              <ListItemText primary={item.name} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
+
+  return (
+    <>
+      <AppBar 
+        position="fixed" 
+        elevation={0}
+        sx={{ 
+          background: '#121212',
+          borderBottom: '1px solid rgba(255, 215, 0, 0.3)',
+          zIndex: (theme) => theme.zIndex.drawer + 1
+        }}
+      >
+        <Toolbar>
+          {isMobile && (
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2, color: '#FFD700' }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{
+              flexGrow: 1,
+              fontWeight: 'bold',
+              letterSpacing: 1,
+              color: '#FFD700',
+              textShadow: '0 0 8px rgba(255, 215, 0, 0.5)'
+            }}
+          >
+            Luba Admin Panel
+          </Typography>
+          {!isMobile && (
+            <Box sx={{ display: 'flex' }}>
+              {navItems.map((item) => (
+                <GoldButton
+                  key={item.name}
+                  component={Link}
+                  to={item.path}
+                  startIcon={item.icon}
+                  sx={{
+                    mx: 1,
+                    fontWeight: location.pathname === item.path ? 'bold' : 'normal',
+                    borderBottom: location.pathname === item.path ? '2px solid #FFD700' : 'none',
+                    borderRadius: 0,
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 215, 0, 0.1)',
+                    },
+                  }}
+                >
+                  {item.name}
+                </GoldButton>
+              ))}
+            </Box>
+          )}
+        </Toolbar>
+      </AppBar>
+      {isMobile && (
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onClose={handleDrawerToggle}
+          ModalProps={{
+            keepMounted: true,
+          }}
+          sx={{
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: 240,
+              background: '#121212',
+              color: '#FFD700'
+            },
+          }}
+        >
+          {drawer}
+        </Drawer>
+      )}
+    </>
+  );
+}
+
 export default function App() {
   return (
     <Router>
-      <AppBar position="static" color="primary">
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1, color: 'secondary.main' }}>
-            Luba Admin Panel
-          </Typography>
-          <Button color="secondary" component={Link} to="/">
-            Dashboard
-          </Button>
-          <Button color="secondary" component={Link} to="/drivers">
-            Drivers
-          </Button>
-          <Button color="secondary" component={Link} to="/jobs">
-            Jobs
-          </Button>
-          <Button color="secondary" component={Link} to="/bookings">
-            Bookings
-          </Button>
-        </Toolbar>
-      </AppBar>
-
-      <Container sx={{ mt: 4, color: 'text.primary' }}>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/drivers" element={<Drivers />} />
-          <Route path="/jobs" element={<Jobs />} />
-          <Route path="/bookings" element={<Bookings />} />
-        </Routes>
-      </Container>
+      <CssBaseline />
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        minHeight: '100vh',
+        background: '#121212',
+        color: '#FFFFFF'
+      }}>
+        <NavBar />
+        <Toolbar /> {/* Spacer for app bar */}
+        <Container
+          component="main"
+          maxWidth="xl"
+          sx={{
+            mt: 3,
+            mb: 4,
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            color: '#FFFFFF'
+          }}
+        >
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/drivers" element={<Drivers />} />
+            <Route path="/jobs" element={<Jobs />} />
+            <Route path="/bookings" element={<Bookings />} />
+          </Routes>
+        </Container>
+      </Box>
     </Router>
   );
 }

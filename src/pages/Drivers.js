@@ -23,12 +23,12 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Grid,
 } from '@mui/material';
 import {
   Search,
   FilterList,
-  MoreVert,
   CheckCircle,
   PendingActions,
   Cancel,
@@ -42,9 +42,7 @@ import {
   Description,
   Warning
 } from '@mui/icons-material';
-import { Grid } from '@mui/material';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
-
 
 const drivers = [
   {
@@ -93,10 +91,10 @@ const statusColors = {
 };
 
 const statusIcons = {
-  Pending: <PendingActions />,
-  Approved: <CheckCircle />,
-  Suspended: <Warning />,
-  Rejected: <Cancel />
+  Pending: <PendingActions sx={{ color: '#FFD700' }} />, // gold color icon
+  Approved: <CheckCircle sx={{ color: '#FFD700' }} />,
+  Suspended: <Warning sx={{ color: '#FFD700' }} />,
+  Rejected: <Cancel sx={{ color: '#FFD700' }} />
 };
 
 export default function Drivers() {
@@ -106,17 +104,17 @@ export default function Drivers() {
   const [filterStatus, setFilterStatus] = useState('All');
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
-  
+
   const open = Boolean(anchorEl);
-  
+
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
-  
+
   const handleClose = () => {
     setAnchorEl(null);
   };
-  
+
   const handleSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -124,16 +122,16 @@ export default function Drivers() {
     }
     setSortConfig({ key, direction });
   };
-  
+
   const handleViewDetails = (driver) => {
     setSelectedDriver(driver);
     setOpenDialog(true);
   };
-  
+
   const handleCloseDialog = () => {
     setOpenDialog(false);
   };
-  
+
   const sortedDrivers = [...drivers].sort((a, b) => {
     if (a[sortConfig.key] < b[sortConfig.key]) {
       return sortConfig.direction === 'asc' ? -1 : 1;
@@ -143,99 +141,107 @@ export default function Drivers() {
     }
     return 0;
   });
-  
+
   const filteredDrivers = sortedDrivers.filter(driver => {
-    const matchesSearch = 
+    const matchesSearch =
       driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       driver.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       driver.phone.includes(searchTerm) ||
       driver.vehicle.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesStatus = filterStatus === 'All' || driver.status === filterStatus;
-    
+
     return matchesSearch && matchesStatus;
   });
 
   return (
-    <Box sx={{ 
-      bgcolor: 'background.default', 
-      minHeight: '100vh', 
+    <Box sx={{
+      bgcolor: '#000', // black background
+      minHeight: '100vh',
       p: 3,
-      color: 'text.primary'
+      color: '#FFD700' // gold text default
     }}>
       {/* Header Section */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        color: 'black',
         mb: 3,
         flexWrap: 'wrap',
         gap: 2
       }}>
-        <Typography variant="h4" sx={{ 
-          color: 'secondary.main',
+        <Typography variant="h4" sx={{
+          color: '#FFD700',
           fontWeight: 'bold',
-          textShadow: '0 0 8px rgba(129, 116, 43, 0.3)'
+          textShadow: '0 0 10px #FFD700',
         }}>
           Driver Management
         </Typography>
-        
+
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button 
-            variant="contained" 
-            color="secondary" 
-            startIcon={<Add />}
-            sx={{ 
+          <Button
+            variant="contained"
+            sx={{
               textTransform: 'none',
-              boxShadow: '0 0 10px rgba(255, 215, 0, 0.5)'
+              boxShadow: '0 0 10px #FFD700',
+              bgcolor: '#FFD700',
+              color: '#000'
             }}
+            startIcon={<Add sx={{ color: '#000' }} />}
           >
             Add New Driver
           </Button>
-          
+
           <Tooltip title="Refresh">
-            <IconButton sx={{ color: 'secondary.main' }}>
+            <IconButton sx={{ color: '#FFD700' }}>
               <Refresh />
             </IconButton>
           </Tooltip>
-          
+
           <Button
             variant="outlined"
-            color="secondary"
+            sx={{
+              textTransform: 'none',
+              borderColor: '#FFD700',
+              color: '#FFD700',
+              '&:hover': {
+                bgcolor: '#FFD700',
+                color: '#000'
+              }
+            }}
             startIcon={<FilterList />}
             onClick={handleClick}
-            sx={{ textTransform: 'none' }}
           >
             Filter
           </Button>
-          
+
           <Menu
             anchorEl={anchorEl}
             open={open}
             onClose={handleClose}
             PaperProps={{
               sx: {
-                bgcolor: 'background.paper',
-                color: 'text.primary',
+                bgcolor: '#121212',
+                color: '#FFD700',
                 border: '1px solid',
-                borderColor: 'primary.main'
+                borderColor: '#FFD700'
               }
             }}
           >
-            <MenuItem disabled>Filter by Status</MenuItem>
-            <Divider sx={{ bgcolor: 'primary.main' }} />
+            <MenuItem disabled sx={{ color: '#FFD700' }}>Filter by Status</MenuItem>
+            <Divider sx={{ bgcolor: '#FFD700' }} />
             {['All', 'Pending', 'Approved', 'Suspended', 'Rejected'].map(status => (
-              <MenuItem 
+              <MenuItem
                 key={status}
                 onClick={() => {
                   setFilterStatus(status);
                   handleClose();
                 }}
                 sx={{
-                  bgcolor: filterStatus === status ? 'primary.main' : 'transparent',
+                  bgcolor: filterStatus === status ? '#FFD700' : 'transparent',
+                  color: filterStatus === status ? '#000' : '#FFD700',
                   '&:hover': {
-                    bgcolor: filterStatus === status ? 'primary.dark' : 'action.hover'
+                    bgcolor: filterStatus === status ? '#FFC107' : '#333'
                   }
                 }}
               >
@@ -245,11 +251,11 @@ export default function Drivers() {
           </Menu>
         </Box>
       </Box>
-      
+
       {/* Search and Stats Bar */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
         mb: 3,
         flexWrap: 'wrap',
@@ -264,25 +270,24 @@ export default function Drivers() {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <Search color="secondary" />
+                <Search sx={{ color: '#FFD700' }} />
               </InputAdornment>
             ),
             sx: {
-              color: 'text.primary',
+              color: '#FFD700',
               '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: 'primary.main'
+                borderColor: '#FFD700'
               }
             }
-            
           }}
-          sx={{ 
+          sx={{
             minWidth: 250,
             '& .MuiInputBase-input': {
-              color: 'text.primary'
+              color: '#FFD700'
             }
           }}
         />
-        
+
         <Box sx={{ display: 'flex', gap: 2 }}>
           {Object.entries({
             All: drivers.length,
@@ -296,30 +301,32 @@ export default function Drivers() {
               variant={filterStatus === status ? 'filled' : 'outlined'}
               color={statusColors[status] || 'default'}
               onClick={() => setFilterStatus(status)}
-              sx={{ 
+              sx={{
                 cursor: 'pointer',
-                borderColor: filterStatus === status ? 'transparent' : 'primary.main',
-                color: filterStatus === status ? 'text.primary' : 'text.secondary'
+                borderColor: filterStatus === status ? 'transparent' : '#FFD700',
+                color: filterStatus === status ? '#000' : '#FFD700',
+                fontWeight: filterStatus === status ? 'bold' : 'normal',
+                bgcolor: filterStatus === status ? '#FFD700' : 'transparent',
               }}
             />
           ))}
         </Box>
       </Box>
-      
+
       {/* Drivers Table */}
-      <TableContainer 
-        component={Paper} 
-        sx={{ 
-          boxShadow: '0 0 20px rgba(178, 34, 34, 0.2)',
-          bgcolor: 'background.paper',
+      <TableContainer
+        component={Paper}
+        sx={{
+          boxShadow: '0 0 20px rgba(255, 215, 0, 0.5)',
+          bgcolor: '#121212',
           border: '1px solid',
-          borderColor: 'primary.main',
+          borderColor: '#FFD700',
           borderRadius: 2
         }}
       >
         <Table>
           <TableHead>
-            <TableRow sx={{ bgcolor: 'primary.main' }}>
+            <TableRow sx={{ bgcolor: '#FFD700' }}>
               {[
                 { key: 'id', label: 'ID' },
                 { key: 'name', label: 'Driver' },
@@ -329,10 +336,10 @@ export default function Drivers() {
                 { key: 'documents', label: 'Documents' },
                 { key: 'actions', label: 'Actions' }
               ].map((column) => (
-                <TableCell 
+                <TableCell
                   key={column.key}
-                  sx={{ 
-                    color: 'secondary.main',
+                  sx={{
+                    color: '#000',
                     fontWeight: 'bold',
                     cursor: column.key !== 'actions' ? 'pointer' : 'default'
                   }}
@@ -341,9 +348,9 @@ export default function Drivers() {
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     {column.label}
                     {sortConfig.key === column.key && (
-                      sortConfig.direction === 'asc' ? 
-                        <ArrowUpward fontSize="small" sx={{ ml: 0.5 }} /> : 
-                        <ArrowDownward fontSize="small" sx={{ ml: 0.5 }} />
+                      sortConfig.direction === 'asc' ?
+                        <ArrowUpward fontSize="small" sx={{ ml: 0.5, color: '#000' }} /> :
+                        <ArrowDownward fontSize="small" sx={{ ml: 0.5, color: '#000' }} />
                     )}
                   </Box>
                 </TableCell>
@@ -356,32 +363,33 @@ export default function Drivers() {
                 <TableRow
                   key={driver.id}
                   hover
-                  sx={{ 
-                    '&:hover': { 
-                      bgcolor: 'rgba(178, 34, 34, 0.1)' 
+                  sx={{
+                    '&:hover': {
+                      bgcolor: 'rgba(255, 215, 0, 0.15)'
                     },
-                    '&:last-child td': { borderBottom: 0 }
+                    '&:last-child td': { borderBottom: 0 },
+                    color: '#FFD700'
                   }}
                 >
-                  <TableCell sx={{ color: 'secondary.main' }}>
+                  <TableCell sx={{ color: '#FFD700' }}>
                     #{driver.id}
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Avatar sx={{ 
-                        bgcolor: 'primary.main', 
-                        color: 'secondary.main',
-                        width: 32, 
+                      <Avatar sx={{
+                        bgcolor: '#FFD700',
+                        color: '#000',
+                        width: 32,
                         height: 32,
                         fontSize: '0.875rem'
                       }}>
                         {driver.name.charAt(0)}
                       </Avatar>
                       <Box>
-                        <Typography sx={{ fontWeight: 'bold' }}>
+                        <Typography sx={{ fontWeight: 'bold', color: '#FFD700' }}>
                           {driver.name}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{ color: '#ccc' }}>
                           Joined: {driver.joinDate}
                         </Typography>
                       </Box>
@@ -390,24 +398,24 @@ export default function Drivers() {
                   <TableCell>
                     <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Email fontSize="small" color="secondary" />
-                        <Typography variant="body2">
+                        <Email fontSize="small" sx={{ color: '#FFD700' }} />
+                        <Typography variant="body2" sx={{ color: '#FFD700' }}>
                           {driver.email}
                         </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Phone fontSize="small" color="secondary" />
-                        <Typography variant="body2">
+                        <Phone fontSize="small" sx={{ color: '#FFD700' }} />
+                        <Typography variant="body2" sx={{ color: '#FFD700' }}>
                           {driver.phone}
                         </Typography>
                       </Box>
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Typography sx={{ fontWeight: 'bold' }}>
+                    <Typography sx={{ fontWeight: 'bold', color: '#FFD700' }}>
                       {driver.vehicle}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{ color: '#ccc' }}>
                       {driver.registration}
                     </Typography>
                   </TableCell>
@@ -417,25 +425,28 @@ export default function Drivers() {
                       label={driver.status}
                       color={statusColors[driver.status]}
                       variant="outlined"
-                      sx={{ 
-                        borderColor: 'primary.main',
-                        color: 'text.primary'
+                      sx={{
+                        borderColor: '#FFD700',
+                        color: '#FFD700',
+                        fontWeight: 'bold'
                       }}
                     />
                   </TableCell>
                   <TableCell>
                     <Badge
-                      color={driver.documents === 'Verified' ? 'success' : 
-                            driver.documents === 'Uploaded' ? 'warning' : 'error'}
+                      color={driver.documents === 'Verified' ? 'success' :
+                        driver.documents === 'Uploaded' ? 'warning' : 'error'}
                       variant="dot"
                       sx={{ mr: 1 }}
                     >
-                      <Typography sx={{ 
-                        display: 'flex', 
+                      <Typography sx={{
+                        display: 'flex',
                         alignItems: 'center',
-                        gap: 0.5
+                        gap: 0.5,
+                        color: '#FFD700',
+                        fontWeight: 'bold'
                       }}>
-                        <Description fontSize="small" />
+                        <Description fontSize="small" sx={{ color: '#FFD700' }} />
                         {driver.documents}
                       </Typography>
                     </Badge>
@@ -443,55 +454,55 @@ export default function Drivers() {
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       <Tooltip title="View details">
-                        <IconButton 
+                        <IconButton
                           size="small"
                           onClick={() => handleViewDetails(driver)}
-                          sx={{ color: 'secondary.main' }}
+                          sx={{ color: '#FFD700' }}
                         >
                           <Person />
                         </IconButton>
                       </Tooltip>
-                      
+
                       {driver.status === 'Pending' && (
                         <>
-                          <Button 
-                            variant="contained" 
-                            color="success" 
+                          <Button
+                            variant="contained"
+                            color="success"
                             size="small"
                             startIcon={<CheckCircle />}
-                            sx={{ 
+                            sx={{
                               textTransform: 'none',
-                              boxShadow: '0 0 8px rgba(76, 175, 80, 0.3)'
+                              boxShadow: '0 0 8px #FFD700'
                             }}
                           >
                             Approve
                           </Button>
-                          <Button 
-                            variant="outlined" 
-                            color="error" 
+                          <Button
+                            variant="outlined"
+                            color="error"
                             size="small"
                             startIcon={<Cancel />}
-                            sx={{ textTransform: 'none' }}
+                            sx={{ textTransform: 'none', color: '#FFD700', borderColor: '#FFD700' }}
                           >
                             Reject
                           </Button>
                         </>
                       )}
                       {driver.status === 'Approved' && (
-                        <Button 
-                          variant="outlined" 
-                          color="warning" 
+                        <Button
+                          variant="outlined"
+                          color="warning"
                           size="small"
                           startIcon={<Warning />}
-                          sx={{ textTransform: 'none' }}
+                          sx={{ textTransform: 'none', color: '#FFD700', borderColor: '#FFD700' }}
                         >
                           Suspend
                         </Button>
                       )}
                       {driver.status === 'Suspended' && (
-                        <Button 
-                          variant="contained" 
-                          color="secondary" 
+                        <Button
+                          variant="contained"
+                          color="secondary"
                           size="small"
                           startIcon={<CheckCircle />}
                           sx={{ textTransform: 'none' }}
@@ -505,10 +516,10 @@ export default function Drivers() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} sx={{ 
+                <TableCell colSpan={7} sx={{
                   textAlign: 'center',
                   py: 4,
-                  color: 'text.secondary'
+                  color: '#999'
                 }}>
                   No drivers found matching your criteria
                 </TableCell>
@@ -517,29 +528,29 @@ export default function Drivers() {
           </TableBody>
         </Table>
       </TableContainer>
-      
-      {/* Pagination would go here */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'flex-end', 
+
+      {/* Pagination info */}
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'flex-end',
         mt: 2,
-        color: 'text.secondary'
+        color: '#999'
       }}>
-        <Typography variant="body2">
+        <Typography variant="body2" sx={{ color: '#999' }}>
           Showing {filteredDrivers.length} of {drivers.length} drivers
         </Typography>
       </Box>
-      
+
       {/* Driver Details Dialog */}
-      <Dialog 
-        open={openDialog} 
+      <Dialog
+        open={openDialog}
         onClose={handleCloseDialog}
         PaperProps={{
           sx: {
-            bgcolor: 'background.paper',
-            color: 'text.primary',
+            bgcolor: '#121212',
+            color: '#FFD700',
             border: '2px solid',
-            borderColor: 'primary.main',
+            borderColor: '#FFD700',
             borderRadius: 2,
             minWidth: '500px'
           }
@@ -547,16 +558,16 @@ export default function Drivers() {
       >
         {selectedDriver && (
           <>
-            <DialogTitle sx={{ 
-              bgcolor: 'primary.main',
-              color: 'secondary.main',
+            <DialogTitle sx={{
+              bgcolor: '#FFD700',
+              color: '#000',
               display: 'flex',
               alignItems: 'center',
               gap: 2
             }}>
-              <Avatar sx={{ 
-                bgcolor: 'secondary.main', 
-                color: 'primary.main',
+              <Avatar sx={{
+                bgcolor: '#000',
+                color: '#FFD700',
                 width: 40,
                 height: 40
               }}>
@@ -567,21 +578,21 @@ export default function Drivers() {
                 label={selectedDriver.status}
                 color={statusColors[selectedDriver.status]}
                 variant="filled"
-                sx={{ ml: 'auto' }}
+                sx={{ ml: 'auto', color: '#000' }}
               />
             </DialogTitle>
             <DialogContent>
               <Box sx={{ mt: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'secondary.main',
+                <Typography variant="h6" gutterBottom sx={{
+                  color: '#FFD700',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1
                 }}>
                   <Person /> Driver Information
                 </Typography>
-                <Divider sx={{ bgcolor: 'primary.main', mb: 2 }} />
-                
+                <Divider sx={{ bgcolor: '#FFD700', mb: 2 }} />
+
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
@@ -608,9 +619,9 @@ export default function Drivers() {
                     <Typography>{selectedDriver.rating}/5.0</Typography>
                   </Grid>
                 </Grid>
-                
-                <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'secondary.main',
+
+                <Typography variant="h6" gutterBottom sx={{
+                  color: '#FFD700',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1,
@@ -618,8 +629,8 @@ export default function Drivers() {
                 }}>
                   <DirectionsCarIcon /> Vehicle Information
                 </Typography>
-                <Divider sx={{ bgcolor: 'primary.main', mb: 2 }} />
-                
+                <Divider sx={{ bgcolor: '#FFD700', mb: 2 }} />
+
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
@@ -634,9 +645,9 @@ export default function Drivers() {
                     <Typography>{selectedDriver.registration}</Typography>
                   </Grid>
                 </Grid>
-                
-                <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'secondary.main',
+
+                <Typography variant="h6" gutterBottom sx={{
+                  color: '#FFD700',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1,
@@ -644,12 +655,12 @@ export default function Drivers() {
                 }}>
                   <Description /> Documents
                 </Typography>
-                <Divider sx={{ bgcolor: 'primary.main', mb: 2 }} />
-                
+                <Divider sx={{ bgcolor: '#FFD700', mb: 2 }} />
+
                 <Typography>
                   Status: <Badge
-                    color={selectedDriver.documents === 'Verified' ? 'success' : 
-                          selectedDriver.documents === 'Uploaded' ? 'warning' : 'error'}
+                    color={selectedDriver.documents === 'Verified' ? 'success' :
+                      selectedDriver.documents === 'Uploaded' ? 'warning' : 'error'}
                     variant="dot"
                     sx={{ mr: 1 }}
                   >
@@ -661,17 +672,30 @@ export default function Drivers() {
               </Box>
             </DialogContent>
             <DialogActions sx={{ p: 3 }}>
-              <Button 
+              <Button
                 onClick={handleCloseDialog}
-                color="secondary"
+                sx={{
+                  borderColor: '#FFD700',
+                  color: '#FFD700',
+                  '&:hover': {
+                    bgcolor: '#FFD700',
+                    color: '#000'
+                  }
+                }}
                 variant="outlined"
               >
                 Close
               </Button>
               {selectedDriver.status === 'Pending' && (
-                <Button 
-                  variant="contained" 
-                  color="success"
+                <Button
+                  variant="contained"
+                  sx={{
+                    bgcolor: '#FFD700',
+                    color: '#000',
+                    '&:hover': {
+                      bgcolor: '#FFC107'
+                    }
+                  }}
                   startIcon={<CheckCircle />}
                 >
                   Approve Driver

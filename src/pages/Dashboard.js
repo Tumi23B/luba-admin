@@ -16,7 +16,6 @@ import {
   DirectionsCar,
   Payment,
   Warning,
-  Notifications,
   CheckCircle
 } from '@mui/icons-material';
 
@@ -73,13 +72,13 @@ export default function Dashboard() {
   ];
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3, bgcolor: '#000000', color: '#FFD700', minHeight: '100vh' }}>
       {/* Welcome Header */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" fontWeight="bold">
+        <Typography variant="h4" fontWeight="bold" color="#FFD700">
           Welcome to Luba Deliveries Admin
         </Typography>
-        <Typography variant="body1" sx={{ mt: 1, color: 'text.secondary' }}>
+        <Typography variant="body1" sx={{ mt: 1, color: '#AAAAAA' }}>
           Manage drivers, monitor jobs, view transactions, and keep your delivery business running smoothly.
         </Typography>
       </Box>
@@ -98,25 +97,27 @@ export default function Dashboard() {
           <Paper
             key={index}
             sx={{
-              flex: '1 1 calc(33.333% - 24px)', // 3 per row with spacing
+              flex: '1 1 calc(33.333% - 24px)',
               minWidth: 280,
               p: 3,
               borderRadius: 2,
-              boxSizing: 'border-box'
+              backgroundColor: '#1a1a1a',
+              color: '#FFD700',
+              border: '1px solid #FFD700'
             }}
           >
             <Box display="flex" alignItems="center" mb={2}>
-              <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
+              <Avatar sx={{ bgcolor: '#FFD700', color: '#000', mr: 2 }}>
                 {card.icon}
               </Avatar>
               <Box>
-                <Typography variant="h6">{card.title}</Typography>
+                <Typography variant="h6" color="#FFD700">{card.title}</Typography>
               </Box>
             </Box>
-            <Typography variant="h3" color="secondary.main">
+            <Typography variant="h3" color="#FFD700">
               {card.value}
             </Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
+            <Typography variant="body2" sx={{ mt: 1, color: '#AAAAAA' }}>
               {card.subtitle}
             </Typography>
           </Paper>
@@ -124,23 +125,23 @@ export default function Dashboard() {
       </Box>
 
       {/* Drivers Pending Approval */}
-      <Paper sx={{ p: 3, mb: 4 }}>
+      <Paper sx={{ p: 3, mb: 4, bgcolor: '#1a1a1a', color: '#FFD700', border: '1px solid #FFD700' }}>
         <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-          <Warning color="primary" sx={{ mr: 1 }} />
+          <Warning sx={{ mr: 1, color: '#FFD700' }} />
           Drivers Pending Approval
         </Typography>
-        <Divider sx={{ mb: 2 }} />
+        <Divider sx={{ mb: 2, bgcolor: '#FFD700' }} />
         <List>
           {pendingDrivers.map(driver => (
             <ListItem
               key={driver.id}
               sx={{
                 mb: 1,
-                bgcolor: 'background.default',
+                bgcolor: '#000',
                 borderRadius: 1
               }}
               secondaryAction={
-                <Button size="small" variant="outlined" color="secondary">
+                <Button size="small" variant="outlined" sx={{ color: '#FFD700', borderColor: '#FFD700' }}>
                   Review
                 </Button>
               }
@@ -148,6 +149,8 @@ export default function Dashboard() {
               <ListItemText
                 primary={driver.name}
                 secondary={`Pending for ${driver.daysPending} day(s)`}
+                primaryTypographyProps={{ style: { color: '#FFD700' } }}
+                secondaryTypographyProps={{ style: { color: '#AAAAAA' } }}
               />
             </ListItem>
           ))}
@@ -155,39 +158,39 @@ export default function Dashboard() {
       </Paper>
 
       {/* Active Jobs */}
-      <Paper sx={{ p: 3, mb: 4 }}>
+      <Paper sx={{ p: 3, mb: 4, bgcolor: '#1a1a1a', color: '#FFD700', border: '1px solid #FFD700' }}>
         <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-          <DirectionsCar color="primary" sx={{ mr: 1 }} />
+          <DirectionsCar sx={{ mr: 1, color: '#FFD700' }} />
           Active Jobs Status
         </Typography>
-        <Divider sx={{ mb: 2 }} />
+        <Divider sx={{ mb: 2, bgcolor: '#FFD700' }} />
         <List>
           {recentJobs.map(job => (
             <ListItem
               key={job.id}
               sx={{
                 mb: 2,
-                bgcolor: 'background.default',
+                bgcolor: '#000',
                 borderRadius: 1,
                 flexDirection: 'column',
                 alignItems: 'flex-start'
               }}
             >
-              <Typography variant="body1" fontWeight="bold" color="secondary.main">
+              <Typography variant="body1" fontWeight="bold" color="#FFD700">
                 {job.driver}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: '#AAAAAA' }}>
                 {job.status}
               </Typography>
               <LinearProgress
                 variant="determinate"
                 value={job.progress}
-                sx={{ width: '100%', height: 8, borderRadius: 4, mt: 1 }}
+                sx={{ width: '100%', height: 8, borderRadius: 4, mt: 1, backgroundColor: '#444', '& .MuiLinearProgress-bar': { backgroundColor: '#FFD700' } }}
               />
               {job.progress === 100 && (
                 <Box display="flex" alignItems="center" mt={1}>
-                  <CheckCircle color="success" sx={{ fontSize: 16, mr: 1 }} />
-                  <Typography variant="caption" color="success.main">Delivery completed</Typography>
+                  <CheckCircle sx={{ fontSize: 16, mr: 1, color: 'green' }} />
+                  <Typography variant="caption" color="green">Delivery completed</Typography>
                 </Box>
               )}
             </ListItem>
@@ -196,13 +199,13 @@ export default function Dashboard() {
       </Paper>
 
       {/* Recent Transactions */}
-      <Paper sx={{ p: 3 }}>
+      <Paper sx={{ p: 3, bgcolor: '#1a1a1a', color: '#FFD700', border: '1px solid #FFD700' }}>
         <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-          <Payment color="primary" sx={{ mr: 1 }} />
+          <Payment sx={{ mr: 1, color: '#FFD700' }} />
           Recent Transactions
         </Typography>
-        <Divider sx={{ mb: 2 }} />
-        <Typography color="text.secondary">
+        <Divider sx={{ mb: 2, bgcolor: '#FFD700' }} />
+        <Typography sx={{ color: '#AAAAAA' }}>
           Transaction data visualization would appear here
         </Typography>
       </Paper>
