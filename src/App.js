@@ -1,3 +1,4 @@
+// This file is part of the Luba contians logic and stylyng for the Dashboard navigation
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import {
@@ -32,21 +33,22 @@ import Bookings from './pages/Bookings';
 
 // Custom styled components for consistent theming
 const GoldButton = styled(Button)(({ theme }) => ({
-  color: '#FFD700',
+  color: '#c5a34f',
   '&:hover': {
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
   },
   '&.Mui-selected': {
     fontWeight: 'bold',
-    borderBottom: '2px solid #FFD700'
+    borderBottom: '2px solid #c5a34f'
   }
 }));
 
+// Navigation icon and its colors
 const navItems = [
-  { name: 'Dashboard', path: '/', icon: <DashboardIcon sx={{ color: '#FFD700' }} /> },
-  { name: 'Drivers', path: '/drivers', icon: <PeopleIcon sx={{ color: '#FFD700' }} /> },
-  { name: 'Jobs', path: '/jobs', icon: <WorkIcon sx={{ color: '#FFD700' }} /> },
-  { name: 'Bookings', path: '/bookings', icon: <BookIcon sx={{ color: '#FFD700' }} /> },
+  { name: 'Dashboard', path: '/', icon: <DashboardIcon sx={{ color: '#b80000' }} /> },
+  { name: 'Drivers', path: '/drivers', icon: <PeopleIcon sx={{ color: '#b80000' }} /> },
+  { name: 'Jobs', path: '/jobs', icon: <WorkIcon sx={{ color: '#b80000' }} /> },
+  { name: 'Bookings', path: '/bookings', icon: <BookIcon sx={{ color: '#b80000' }} /> },
 ];
 
 function NavBar() {
@@ -62,12 +64,12 @@ function NavBar() {
     <Box 
       onClick={handleDrawerToggle}
       sx={{ 
-        background: '#121212',
+        background: '#fefefefe',
         height: '100%',
-        color: '#FFD700'
+        color: '#c5a34f'
       }}
     >
-      <Typography variant="h6" sx={{ my: 2, p: 2, color: '#FFD700' }}>
+      <Typography variant="h6" sx={{ my: 2, p: 2, color: '#b80000' }}>
         Luba Admin
       </Typography>
       <Divider sx={{ borderColor: 'rgba(255, 215, 0, 0.5)' }} />
@@ -79,13 +81,13 @@ function NavBar() {
               to={item.path}
               selected={location.pathname === item.path}
               sx={{
-                color: '#FFD700',
+                color: '#c5a34f',
                 '&.Mui-selected': {
                   backgroundColor: 'rgba(255, 215, 0, 0.1)',
                   fontWeight: 'bold'
                 },
                 '&:hover': {
-                  backgroundColor: 'rgba(255, 215, 0, 0.05)'
+                  backgroundColor: 'rgba(255, 215, 0, 0.3)'
                 }
               }}
             >
@@ -103,7 +105,7 @@ function NavBar() {
         position="fixed" 
         elevation={0}
         sx={{ 
-          background: '#121212',
+          background: '#fefefefe',
           borderBottom: '1px solid rgba(255, 215, 0, 0.3)',
           zIndex: (theme) => theme.zIndex.drawer + 1
         }}
@@ -115,7 +117,7 @@ function NavBar() {
               aria-label="open drawer"
               edge="start"
               onClick={handleDrawerToggle}
-              sx={{ mr: 2, color: '#FFD700' }}
+              sx={{ mr: 2, color: '#c5a34f' }}
             >
               <MenuIcon />
             </IconButton>
@@ -127,8 +129,7 @@ function NavBar() {
               flexGrow: 1,
               fontWeight: 'bold',
               letterSpacing: 1,
-              color: '#FFD700',
-              textShadow: '0 0 8px rgba(255, 215, 0, 0.5)'
+              color: '#c5a34f',
             }}
           >
             Luba Admin Panel
@@ -144,7 +145,7 @@ function NavBar() {
                   sx={{
                     mx: 1,
                     fontWeight: location.pathname === item.path ? 'bold' : 'normal',
-                    borderBottom: location.pathname === item.path ? '2px solid #FFD700' : 'none',
+                    borderBottom: location.pathname === item.path ? '2px solid #c5a34f' : 'none',
                     borderRadius: 0,
                     '&:hover': {
                       backgroundColor: 'rgba(255, 215, 0, 0.1)',
@@ -170,8 +171,8 @@ function NavBar() {
             '& .MuiDrawer-paper': { 
               boxSizing: 'border-box', 
               width: 240,
-              background: '#121212',
-              color: '#FFD700'
+              background: '#fefefefe',
+              color: '#c5a34f'
             },
           }}
         >
@@ -190,8 +191,8 @@ export default function App() {
         display: 'flex', 
         flexDirection: 'column', 
         minHeight: '100vh',
-        background: '#121212',
-        color: '#FFFFFF'
+        background: '#fefefefe',
+        color: '#c5a34f'
       }}>
         <NavBar />
         <Toolbar /> {/* Spacer for app bar */}

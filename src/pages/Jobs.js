@@ -159,8 +159,8 @@ const DriverCard = ({ driver, onClick }) => {
             sx={{
               width: 48,
               height: 48,
-              bgcolor: 'primary.main',
-              color: 'white',
+              bgcolor: '#c5a34f',
+              color: '#fefefefe',
               mr: 2,
             }}
           >
@@ -179,7 +179,7 @@ const DriverCard = ({ driver, onClick }) => {
                 sx={{ mr: 1 }}
               />
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <StarIcon sx={{ color: 'text.secondary', fontSize: '1rem', mr: 0.5 }} />
+                <StarIcon sx={{ color: '#b80000', fontSize: '1rem', mr: 0.5 }} />
                 <Typography variant="body2">{driver.rating}</Typography>
               </Box>
             </Box>
@@ -280,7 +280,7 @@ const DriverDetails = ({ driver, onClose }) => {
             sx={{
               width: 64,
               height: 64,
-              bgcolor: 'primary.main',
+              bgcolor: '#c5a34f',
               color: 'white',
               mr: 3,
               fontSize: '1.5rem',
@@ -293,7 +293,7 @@ const DriverDetails = ({ driver, onClose }) => {
               {driver.name}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-              <StarIcon sx={{ color: 'text.secondary', mr: 0.5 }} />
+              <StarIcon sx={{ color: '#b80000', mr: 0.5 }} />
               <Typography>{driver.rating}</Typography>
               <Typography variant="body2" sx={{ ml: 1, color: 'text.secondary' }}>
                 Joined {driver.joinDate}
@@ -310,13 +310,13 @@ const DriverDetails = ({ driver, onClose }) => {
             <List dense>
               <ListItem>
                 <ListItemIcon sx={{ minWidth: 36 }}>
-                  <PhoneIcon color="primary" />
+                  <PhoneIcon color="#b80000" />
                 </ListItemIcon>
                 <ListItemText primary={driver.phone} />
               </ListItem>
               <ListItem>
                 <ListItemIcon sx={{ minWidth: 36 }}>
-                  <AddressIcon color="primary" />
+                  <AddressIcon color="#b80000" />
                 </ListItemIcon>
                 <ListItemText primary={driver.address} />
               </ListItem>
@@ -330,13 +330,13 @@ const DriverDetails = ({ driver, onClose }) => {
             <List dense>
               <ListItem>
                 <ListItemIcon sx={{ minWidth: 36 }}>
-                  <VehicleIcon color="primary" />
+                  <VehicleIcon color="#b80000" />
                 </ListItemIcon>
                 <ListItemText primary={driver.vehicle} />
               </ListItem>
               <ListItem>
                 <ListItemIcon sx={{ minWidth: 36 }}>
-                  <LocationIcon color="primary" />
+                  <LocationIcon color="#b80000" />
                 </ListItemIcon>
                 <ListItemText primary={driver.registration} />
               </ListItem>
@@ -356,7 +356,7 @@ const DriverDetails = ({ driver, onClose }) => {
               variant="outlined"
               startIcon={<DocumentIcon />}
               fullWidth
-              sx={{ justifyContent: 'flex-start' }}
+              sx={{ justifyContent: 'flex-start', color: '#b80000', borderColor: '#c5a34' }}
               onClick={() => window.open(doc.url, '_blank')}
             >
               {doc.name}
