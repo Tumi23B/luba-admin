@@ -211,6 +211,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/drivers" element={<Drivers />} />
+            {/* New route for specific driver details */}
+            <Route path="/drivers/:driverId" element={<Drivers />} /> 
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/bookings" element={<Bookings />} />
           </Routes>

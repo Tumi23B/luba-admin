@@ -1,339 +1,294 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Typography, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper, Button, Box, Chip, Avatar, TextField, InputAdornment, IconButton, Tooltip, Menu, MenuItem, Divider, Badge, Dialog, DialogTitle, DialogContent, DialogActions, Grid } from '@mui/material';
 import { Search, FilterList, CheckCircle, PendingActions, Cancel, Refresh, Add, ArrowDownward, ArrowUpward, Email, Phone, Person, Description, Warning, DirectionsCar as DirectionsCarIcon } from '@mui/icons-material';
 
-// Static Data Section
-// This section defines the initial array of driver objects.
-const drivers = [
-  {
-    id: 1,
-    name: 'John Doe',
-    email: 'john@example.com',
-    phone: '+27 12 345 6789',
-    status: 'Pending',
-    documents: 'Uploaded',
-    vehicle: 'Toyota Hilux',
-    registration: 'CA 123-456',
-    rating: 4.5,
-    joinDate: '2023-05-10'
-  },
-  {
-    id: 2,
-    name: 'Jane Smith',
-    email: 'jane@example.com',
-    phone: '+27 98 765 4321',
-    status: 'Approved',
-    documents: 'Verified',
-    vehicle: 'Ford Ranger',
-    registration: 'GP 987-654',
-    rating: 4.8,
-    joinDate: '2023-04-15'
-  },
-  {
-    id: 3,
-    name: 'Mike Johnson',
-    email: 'mike@example.com',
-    phone: '+27 11 222 3333',
-    status: 'Suspended',
-    documents: 'Expired',
-    vehicle: 'VW Amarok',
-    registration: 'EC 456-789',
-    rating: 3.9,
-    joinDate: '2023-03-20'
-  },
-];
+import { useParams, useNavigate } from 'react-router-dom'; // Import useParams and useNavigate
+import { db } from '../firebase'; // Import Firebase Realtime Database instance
+import { ref, onValue, update, remove } from 'firebase/database'; // Import database functions (update and remove added)
 
-// Constants and Mappings Section
-// This section defines color and icon mappings for driver statuses.
-const statusColors = {
-  Pending: 'warning',
-  Approved: 'success',
-  Suspended: 'error',
-  Rejected: 'error'
-};
-
-const statusIcons = {
-  Pending: <PendingActions sx={{ color: '#c5a34f' }} />, // gold color icon
-  Approved: <CheckCircle sx={{ color: '#c5a34f' }} />,
-  Suspended: <Warning sx={{ color: '#c5a34f' }} />,
-  Rejected: <Cancel sx={{ color: '#b80000' }} />
-};
-
-// Main Component Section
-// This is the main React functional component for the Drivers management page.
 export default function Drivers() {
-  // State Variables
-  const [anchorEl, setAnchorEl] = useState(null); // State for filter menu anchor
-  const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' }); // State for table sorting
-  const [searchTerm, setSearchTerm] = useState(''); // State for search input
-  const [filterStatus, setFilterStatus] = useState('All'); // State for status filter
-  const [selectedDriver, setSelectedDriver] = useState(null); // State for selected driver in dialog
-  const [openDialog, setOpenDialog] = useState(false); // State for opening/closing driver details dialog
+  const { driverId } = useParams(); // Get driverId from URL parameters
+  const navigate = useNavigate(); // Initialize navigate hook
 
-  const open = Boolean(anchorEl); // Derived state for filter menu open status
+  const [drivers, setDrivers] = useState([]); // State for all drivers (might fetch all or filter)
+  const [selectedDriver, setSelectedDriver] = useState(null); // State for the driver being reviewed
+  const [openDialog, setOpenDialog] = useState(false); // Dialog open/close state
+  const [searchTerm, setSearchTerm] = useState(''); // Search term state
+  const [filterStatus, setFilterStatus] = useState('All'); // Filter status state
+  const [anchorEl, setAnchorEl] = useState(null); // Anchor for filter menu
+  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' }); // Sorting configuration
 
-  // Event Handlers Section
-  // Handles opening the filter menu.
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  // Handles closing the filter menu.
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  // Handles sorting of the driver table.
-  const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+  useEffect(() => {
+    // If a driverId is present in the URL, fetch that specific driver's details
+    if (driverId) {
+      const driverApplicationRef = ref(db, `driverApplications/${driverId}`);
+      onValue(driverApplicationRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          setSelectedDriver({
+            id: driverId, // Use the UID as the ID
+            name: data.fullName,
+            email: 'N/A', // Email might not be stored in driverApplications
+            phone: 'N/A', // Phone might not be stored in driverApplications
+            status: data.status,
+            documents: 'View Photos', // Indicates that images are available
+            vehicle: data.vehicleType,
+            registration: 'N/A', // Registration might not be stored here
+            rating: 'N/A', // Rating not applicable for pending
+            joinDate: new Date(data.createdAt).toLocaleDateString(),
+            address: data.address,
+            idNumber: data.idNumber,
+            images: data.images // Pass images for display
+          });
+          setOpenDialog(true); // Open the dialog automatically if a driver ID is present
+        } else {
+          console.warn(`Driver with ID ${driverId} not found in driverApplications.`);
+          setSelectedDriver(null);
+          setOpenDialog(false); // Close dialog if driver not found
+          // Optionally, navigate back to the drivers list or show an error
+          // navigate('/drivers'); 
+        }
+      }, (error) => {
+        console.error("Error fetching specific driver:", error);
+        setSelectedDriver(null);
+        setOpenDialog(false);
+      });
     }
-    setSortConfig({ key, direction });
-  };
 
-  // Handles opening the driver details dialog and setting the selected driver.
-  const handleViewDetails = (driver) => {
+    // Fetch all drivers for the table (you might want to fetch based on status or paginate later)
+    const allDriversRef = ref(db, 'drivers'); // Assuming 'drivers' node has general driver info
+    onValue(allDriversRef, (snapshot) => {
+      const allDriversData = [];
+      snapshot.forEach((childSnapshot) => {
+        const driver = childSnapshot.val();
+        allDriversData.push({
+          id: childSnapshot.key,
+          name: driver.fullName || 'N/A',
+          email: driver.email || 'N/A', // Assuming email might be here or fetched separately
+          phone: driver.phone || 'N/A', // Assuming phone might be here or fetched separately
+          status: driver.status || 'Unknown',
+          documents: driver.profileImage ? 'Verified' : 'Pending', // Simple check if profile image exists
+          vehicle: driver.vehicleType || 'N/A',
+          registration: driver.registration || 'N/A',
+          rating: driver.rating || 0,
+          joinDate: driver.createdAt ? new Date(driver.createdAt).toLocaleDateString() : 'N/A',
+          uid: childSnapshot.key // Store UID for consistency
+        });
+      });
+      setDrivers(allDriversData);
+    }, (error) => {
+      console.error("Error fetching all drivers:", error);
+    });
+
+  }, [driverId]); // Rerun useEffect if driverId changes
+
+  // Function to handle opening the dialog with driver details
+  const handleOpenDialog = (driver) => {
     setSelectedDriver(driver);
     setOpenDialog(true);
   };
 
-  // Handles closing the driver details dialog.
+  // Function to handle closing the dialog
   const handleCloseDialog = () => {
     setOpenDialog(false);
+    setSelectedDriver(null);
+    // If we navigated here via URL, going back to /drivers after closing the dialog
+    if (driverId) {
+      navigate('/dashboard'); // Or '/drivers' if you have a general drivers list
+    }
   };
 
-  // Data Processing Section
-  // Sorts the drivers based on the current sort configuration.
+  // Function to handle approving a driver
+  const handleApprove = async () => {
+    if (!selectedDriver || selectedDriver.status !== 'Pending') return;
+
+    try {
+      // Update status in driverApplications
+      await update(ref(db, `driverApplications/${selectedDriver.id}`), {
+        status: 'Approved'
+      });
+
+      // Update status in drivers (main driver profile)
+      await update(ref(db, `drivers/${selectedDriver.id}`), {
+        status: 'Approved', // Set status to Approved
+        rating: 5, // Optionally set a default rating for new approved drivers
+        tripsCompleted: 0 // Reset or ensure trips are 0 for new approved drivers
+      });
+
+      alert(`Driver ${selectedDriver.name} approved successfully!`);
+      handleCloseDialog();
+    } catch (error) {
+      console.error("Error approving driver:", error);
+      alert("Failed to approve driver. Please try again.");
+    }
+  };
+
+  // Function to handle rejecting a driver
+  const handleReject = async () => {
+    if (!selectedDriver || selectedDriver.status !== 'Pending') return;
+
+    try {
+      // Update status in driverApplications
+      await update(ref(db, `driverApplications/${selectedDriver.id}`), {
+        status: 'Rejected'
+      });
+
+      // Optionally, you might want to remove the driver from the 'drivers' node
+      // or set their status to 'Rejected' there as well.
+      // For now, let's just update the status in 'drivers'
+      await update(ref(db, `drivers/${selectedDriver.id}`), {
+        status: 'Rejected'
+      });
+
+      alert(`Driver ${selectedDriver.name} rejected.`);
+      handleCloseDialog();
+    } catch (error) {
+      console.error("Error rejecting driver:", error);
+      alert("Failed to reject driver. Please try again.");
+    }
+  };
+
+  // Filter and sort logic for the table (existing logic)
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const handleFilterClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleFilterClose = (status) => {
+    setAnchorEl(null);
+    if (status) {
+      setFilterStatus(status);
+    }
+  };
+
+  const handleRequestSort = (property) => {
+    const isAsc = sortConfig.key === property && sortConfig.direction === 'ascending';
+    setSortConfig({ key: property, direction: isAsc ? 'descending' : 'ascending' });
+  };
+
   const sortedDrivers = [...drivers].sort((a, b) => {
     if (a[sortConfig.key] < b[sortConfig.key]) {
-      return sortConfig.direction === 'asc' ? -1 : 1;
+      return sortConfig.direction === 'ascending' ? -1 : 1;
     }
     if (a[sortConfig.key] > b[sortConfig.key]) {
-      return sortConfig.direction === 'asc' ? 1 : -1;
+      return sortConfig.direction === 'ascending' ? 1 : -1;
     }
     return 0;
   });
 
-  // Filters the sorted drivers based on the search term and status filter.
   const filteredDrivers = sortedDrivers.filter(driver => {
-    const matchesSearch =
-      driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      driver.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      driver.phone.includes(searchTerm) ||
-      driver.vehicle.toLowerCase().includes(searchTerm.toLowerCase());
-
+    const matchesSearch = driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          driver.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          driver.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          driver.vehicle.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'All' || driver.status === filterStatus;
-
     return matchesSearch && matchesStatus;
   });
 
-  // Render Section
-  // This section defines the JSX structure of the component.
   return (
-    <Box sx={{
-      bgcolor: '#fefefefe', // black background
-      minHeight: '100vh',
-      p: 3,
-      color: '#c5a34f' // gold text default
-    }}>
-      {/* Header Section */}
-      <Box sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        mb: 3,
-        flexWrap: 'wrap',
-        gap: 2
-      }}>
-        <Typography variant="h4" sx={{
-          color: '#c5a34f',
-          fontWeight: 'bold',
-    
-        }}>
-          Driver Management
-        </Typography>
+    <Box sx={{ p: 3, bgcolor: '#fefefefe', minHeight: '100vh', color: '#c5a34f' }}>
+      <Typography variant="h4" fontWeight="bold" sx={{ mb: 3, color: '#b00000' }}>
+        Driver Management
+      </Typography>
 
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          {/* Add New Driver Button */}
-          <Button
-            variant="contained"
-            sx={{
-              textTransform: 'none',
-              bgcolor: '#c5a34f',
-              color: '#000'
-            }}
-            startIcon={<Add sx={{ color: '#000' }} />}
-          >
-            Add New Driver
-          </Button>
-
-          {/* Refresh Button */}
-          <Tooltip title="Refresh">
-            <IconButton sx={{ color: '#b80000' }}>
-              <Refresh />
-            </IconButton>
-          </Tooltip>
-
-          {/* Filter Button */}
-          <Button
-            variant="outlined"
-            sx={{
-              textTransform: 'none',
-              borderColor: '#c5a34f',
-              color: '#000',
-              '&:hover': {
-                bgcolor: '#c5a34f',
-                color: '#3f3d37ff'
-              }
-            }}
-            startIcon={<FilterList />}
-            onClick={handleClick}
-          >
-            Filter
-          </Button>
-
-          {/* Filter Menu */}
-          <Menu
-            anchorEl={anchorEl}
-            open={open}
-            onClose={handleClose}
-            PaperProps={{
-              sx: {
-                bgcolor: '#fefefefe',
-                color: '#c5a34f',
-                border: '1px solid',
-                borderColor: '#c5a34f'
-              }
-            }}
-          >
-            <MenuItem disabled sx={{ color: '#928E85' }}>Filter by Status</MenuItem>
-            <Divider sx={{ bgcolor: '#c5a34f' }} />
-            {['All', 'Pending', 'Approved', 'Suspended', 'Rejected'].map(status => (
-              <MenuItem
-                key={status}
-                onClick={() => {
-                  setFilterStatus(status);
-                  handleClose();
-                }}
-                sx={{
-                  bgcolor: filterStatus === status ? '#c5a34f' : 'transparent',
-                  color: filterStatus === status ? '#000' : '#c5a34f',
-                  '&:hover': {
-                    bgcolor: filterStatus === status ? '#c5a34f' : '#333'
-                  }
-                }}
-              >
-                {status}
-              </MenuItem>
-            ))}
-          </Menu>
-        </Box>
-      </Box>
-
-      {/* Search and Stats Bar */}
-      <Box sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        mb: 3,
-        flexWrap: 'wrap',
-        gap: 2
-      }}>
-        {/* Search Text Field */}
+      {/* Control Bar (Search, Filter, Add Driver) */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap' }}>
         <TextField
+          label="Search Drivers"
           variant="outlined"
-          placeholder="Search drivers..."
           size="small"
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={handleSearchChange}
+          sx={{
+            width: { xs: '100%', sm: '48%', md: '30%' },
+            mb: { xs: 2, sm: 0 },
+            '& .MuiOutlinedInput-root': {
+              '& fieldset': { borderColor: '#c5a34f' },
+              '&:hover fieldset': { borderColor: '#b00000' },
+              '&.Mui-focused fieldset': { borderColor: '#c5a34f' },
+              color: '#c5a34f'
+            },
+            '& .MuiInputLabel-root': { color: '#c5a34f' }
+          }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <Search sx={{ color: '#c5a34f' }} />
+                <Search sx={{ color: '#b00000' }} />
               </InputAdornment>
             ),
-            sx: {
-              color: '#c5a34f',
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#c5a34f'
-              }
-            }
-          }}
-          sx={{
-            minWidth: 250,
-            '& .MuiInputBase-input': {
-              color: '#c5a34f'
-            }
           }}
         />
 
-        {/* Status Filter Chips */}
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          {Object.entries({
-            All: drivers.length,
-            Pending: drivers.filter(d => d.status === 'Pending').length,
-            Approved: drivers.filter(d => d.status === 'Approved').length,
-            Suspended: drivers.filter(d => d.status === 'Suspended').length
-          }).map(([status, count]) => (
-            <Chip
-              key={status}
-              label={`${status}: ${count}`}
-              variant={filterStatus === status ? 'filled' : 'outlined'}
-              color={statusColors[status] || 'default'}
-              onClick={() => setFilterStatus(status)}
-              sx={{
-                cursor: 'pointer',
-                borderColor: filterStatus === status ? 'transparent' : '#b80000',
-                color: filterStatus === status ? '#000' : '#c5a34f',
-                fontWeight: filterStatus === status ? 'bold' : 'normal',
-                bgcolor: filterStatus === status ? '#c5a34f' : 'transparent',
-              }}
-            />
-          ))}
+        <Box>
+          <Button
+            variant="outlined"
+            onClick={handleFilterClick}
+            startIcon={<FilterList />}
+            sx={{
+              mr: 2, borderColor: '#c5a34f', color: '#c5a34f',
+              '&:hover': { borderColor: '#b00000', color: '#b00000' }
+            }}
+          >
+            Filter: {filterStatus}
+          </Button>
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={() => handleFilterClose(null)}
+          >
+            <MenuItem onClick={() => handleFilterClose('All')}>All</MenuItem>
+            <MenuItem onClick={() => handleFilterClose('Approved')}>Approved</MenuItem>
+            <MenuItem onClick={() => handleFilterClose('Pending')}>Pending</MenuItem>
+            <MenuItem onClick={() => handleFilterClose('Rejected')}>Rejected</MenuItem>
+            <MenuItem onClick={() => handleFilterClose('Active')}>Active</MenuItem>
+            <MenuItem onClick={() => handleFilterClose('Inactive')}>Inactive</MenuItem>
+          </Menu>
+
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            sx={{
+              bgcolor: '#c5a34f', color: '#000',
+              '&:hover': { bgcolor: '#b00000' }
+            }}
+            // You might want to add a function to open an "Add Driver" form
+          >
+            Add Driver
+          </Button>
         </Box>
       </Box>
 
       {/* Drivers Table */}
-      <TableContainer
-        component={Paper}
-        sx={{
-          boxShadow: '0 0 20px rgba(255, 215, 0, 0.5)',
-          bgcolor: '#fefefe',
-          border: '1px solid',
-          borderColor: '#c5a34f',
-          borderRadius: 2
-        }}
-      >
+      <TableContainer component={Paper} sx={{
+        borderRadius: 2, border: '1px solid #c5a34f',
+        backgroundColor: '#fefefefe'
+      }}>
         <Table>
           <TableHead>
-            <TableRow sx={{ bgcolor: '#c5a34f' }}>
+            <TableRow sx={{ bgcolor: '#000000' }}>
               {[
-                { key: 'id', label: 'ID' },
-                { key: 'name', label: 'Driver' },
-                { key: 'contact', label: 'Contact' },
-                { key: 'vehicle', label: 'Vehicle' },
+                { key: 'name', label: 'Driver Name' },
+                { key: 'email', label: 'Email' },
+                { key: 'phone', label: 'Phone' },
                 { key: 'status', label: 'Status' },
                 { key: 'documents', label: 'Documents' },
+                { key: 'vehicle', label: 'Vehicle' },
+                { key: 'rating', label: 'Rating' },
+                { key: 'joinDate', label: 'Join Date' },
                 { key: 'actions', label: 'Actions' }
-              ].map((column) => (
+              ].map((headCell) => (
                 <TableCell
-                  key={column.key}
-                  sx={{
-                    color: '#000',
-                    fontWeight: 'bold',
-                    cursor: column.key !== 'actions' ? 'pointer' : 'default'
-                  }}
-                  onClick={column.key !== 'actions' ? () => handleSort(column.key) : null}
+                  key={headCell.key}
+                  sx={{ color: '#c5a34f', fontWeight: 'bold', cursor: 'pointer' }}
+                  onClick={() => headCell.key !== 'actions' && handleRequestSort(headCell.key)}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    {column.label}
-                    {sortConfig.key === column.key && (
-                      sortConfig.direction === 'asc' ?
-                        <ArrowUpward fontSize="small" sx={{ ml: 0.5, color: '#fefefefe' }} /> :
-                        <ArrowDownward fontSize="small" sx={{ ml: 0.5, color: '#fefefefe' }} />
-                    )}
-                  </Box>
+                  {headCell.label}
+                  {sortConfig.key === headCell.key ? (
+                    sortConfig.direction === 'ascending' ? <ArrowUpward sx={{ ml: 0.5, fontSize: 16 }} /> : <ArrowDownward sx={{ ml: 0.5, fontSize: 16 }} />
+                  ) : null}
                 </TableCell>
               ))}
             </TableRow>
@@ -341,171 +296,78 @@ export default function Drivers() {
           <TableBody>
             {filteredDrivers.length > 0 ? (
               filteredDrivers.map((driver) => (
-                <TableRow
-                  key={driver.id}
-                  hover
-                  sx={{
-                    '&:hover': {
-                      bgcolor: 'rgba(255, 215, 0, 0.15)'
-                    },
-                    '&:last-child td': { borderBottom: 0 },
-                    color: '#c5a34f'
-                  }}
-                >
-                  <TableCell sx={{ color: '#b80000' }}>
-                    #{driver.id}
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Avatar sx={{
-                        bgcolor: '#c5a34f',
-                        color: '#000',
-                        width: 32,
-                        height: 32,
-                        fontSize: '0.875rem'
-                      }}>
-                        {driver.name.charAt(0)}
-                      </Avatar>
-                      <Box>
-                        <Typography sx={{ fontWeight: 'bold', color: '#c5a34f' }}>
-                          {driver.name}
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#928e85' }}>
-                          Joined: {driver.joinDate}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Email fontSize="small" sx={{ color: '#c5a34f' }} />
-                        <Typography variant="body2" sx={{ color: '#c5a34f' }}>
-                          {driver.email}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Phone fontSize="small" sx={{ color: '#928e85' }} />
-                        <Typography variant="body2" sx={{ color: '#928e85' }}>
-                          {driver.phone}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Typography sx={{ fontWeight: 'bold', color: '#c5a34f' }}>
-                      {driver.vehicle}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: '#928e85' }}>
-                      {driver.registration}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
+                <TableRow key={driver.id}>
+                  <TableCell sx={{ color: '#b00000' }}>{driver.name}</TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>{driver.email}</TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>{driver.phone}</TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>
                     <Chip
-                      icon={statusIcons[driver.status]}
                       label={driver.status}
-                      color={statusColors[driver.status]}
-                      variant="outlined"
-                      sx={{
-                        borderColor: '#c5a34f',
-                        color: '#c5a34f',
-                        fontWeight: 'bold'
-                      }}
+                      size="small"
+                      icon={
+                        driver.status === 'Approved' ? <CheckCircle /> :
+                        driver.status === 'Pending' ? <PendingActions /> :
+                        driver.status === 'Rejected' ? <Cancel /> :
+                        null
+                      }
+                      color={
+                        driver.status === 'Approved' ? 'success' :
+                        driver.status === 'Pending' ? 'warning' :
+                        driver.status === 'Rejected' ? 'error' :
+                        'default'
+                      }
+                      sx={{ fontWeight: 'bold' }}
                     />
                   </TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>{driver.documents}</TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>{driver.vehicle}</TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>{driver.rating}</TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>{driver.joinDate}</TableCell>
                   <TableCell>
-                    <Badge
-                      color={driver.documents === 'Verified' ? 'success' :
-                        driver.documents === 'Uploaded' ? 'warning' : 'error'}
-                      variant="dot"
-                      sx={{ mr: 1 }}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      sx={{
+                        mr: 1, borderColor: '#c5a34f', color: '#c5a34f',
+                        '&:hover': { borderColor: '#b00000', color: '#b00000' }
+                      }}
+                      onClick={() => handleOpenDialog(driver)} // Open dialog with driver details
                     >
-                      <Typography sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        color: '#c5a34f',
-                        fontWeight: 'bold'
-                      }}>
-                        <Description fontSize="small" sx={{ color: '#c5a34f' }} />
-                        {driver.documents}
-                      </Typography>
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      {/* View Details Button */}
-                      <Tooltip title="View details">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleViewDetails(driver)}
-                          sx={{ color: '#b80000' }}
-                        >
-                          <Person />
-                        </IconButton>
-                      </Tooltip>
-
-                      {/* Action Buttons based on Driver Status */}
-                      {driver.status === 'Pending' && (
-                        <>
-                          <Button
-                            variant="contained"
-                            color="success"
-                            size="small"
-                            startIcon={<CheckCircle />}
-                            sx={{
-                              textTransform: 'none',
-                              boxShadow: '0 0 8px #c5a34f'
-                            }}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            variant="outlined"
-                            color="error"
-                            size="small"
-                            startIcon={<Cancel />}
-                            sx={{ textTransform: 'none', color: '#b80000', borderColor: '#c5a34f', boxShadow: '0 0 8px #c5a34f' }}
-                          >
-                            Reject
-                          </Button>
-                        </>
-                      )}
-                      {driver.status === 'Approved' && (
+                      View
+                    </Button>
+                    {driver.status === 'Pending' && (
+                      <>
                         <Button
-                          variant="outlined"
-                          color="warning"
                           size="small"
-                          startIcon={<Warning />}
-                          sx={{ textTransform: 'none', color: '#928E85', borderColor: '#c5a34f' , boxShadow: '0 0 8px #c5a34f' }}
-                        >
-                          Suspend
-                        </Button>
-                      )}
-                      {driver.status === 'Suspended' && (
-                        <Button
                           variant="contained"
-                          color="secondary"
-                          size="small"
-                          startIcon={<CheckCircle />}
-                          sx={{ textTransform: 'none' , boxShadow: '0 0 8px #c5a34f'}}
+                          sx={{
+                            mr: 1, bgcolor: 'success.main', color: '#fff',
+                            '&:hover': { bgcolor: 'success.dark' }
+                          }}
+                          onClick={() => handleApprove(driver)} // Call approve function directly from table
                         >
-                          Reinstate
+                          Approve
                         </Button>
-                      )}
-                    </Box>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          sx={{
+                            bgcolor: 'error.main', color: '#fff',
+                            '&:hover': { bgcolor: 'error.dark' }
+                          }}
+                          onClick={() => handleReject(driver)} // Call reject function directly from table
+                        >
+                          Reject
+                        </Button>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               ))
             ) : (
-              // Message when no drivers are found
               <TableRow>
-                <TableCell colSpan={7} sx={{
-                  textAlign: 'center',
-                  py: 4,
-                  color: '#999'
-                }}>
-                  No drivers found matching your criteria
+                <TableCell colSpan={9} align="center" sx={{ color: '#AAAAAA' }}>
+                  No drivers found.
                 </TableCell>
               </TableRow>
             )}
@@ -513,142 +375,109 @@ export default function Drivers() {
         </Table>
       </TableContainer>
 
-      {/* Pagination Info Section */}
-      <Box sx={{
-        display: 'flex',
-        justifyContent: 'flex-end',
-        mt: 2,
-        color: '#999'
-      }}>
-        <Typography variant="body2" sx={{ color: '#999' }}>
-          Showing {filteredDrivers.length} of {drivers.length} drivers
-        </Typography>
-      </Box>
-
-      {/* Driver Details Dialog Section */}
-      {/* This section defines the modal dialog for displaying detailed driver information. */}
-      <Dialog
-        open={openDialog}
-        onClose={handleCloseDialog}
-        PaperProps={{
-          sx: {
-            bgcolor: '#c5a34f',
-            color: '#c5a34f',
-            border: '2px solid',
-            borderColor: '#c5a34f',
-            borderRadius: 2,
-            minWidth: '500px'
-          }
-        }}
-      >
+      {/* Driver Details Dialog */}
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#b00000', color: '#fefefefe' }}>
+          <Box display="flex" alignItems="center">
+            <Person sx={{ mr: 1 }} /> Driver Details: {selectedDriver?.name}
+          </Box>
+        </DialogTitle>
         {selectedDriver && (
           <>
-            <DialogTitle sx={{
-              bgcolor: '#c5a34f',
-              color: '#000',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2
-            }}>
-              <Avatar sx={{
-                bgcolor: '#000',
-                color: '#b80000',
-                width: 40,
-                height: 40
-              }}>
-                {selectedDriver.name.charAt(0)}
-              </Avatar>
-              {selectedDriver.name}
-              <Chip
-                label={selectedDriver.status}
-                color={statusColors[selectedDriver.status]}
-                variant="filled"
-                sx={{ ml: 'auto', color: '#000' }}
-              />
-            </DialogTitle>
-            <DialogContent>
-              <Box sx={{ mt: 3 }}>
-                {/* Driver Information Sub-section */}
-                <Typography variant="h6" gutterBottom sx={{
-                  color: '#c5a34f',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}>
-                  <Person /> Driver Information
-                </Typography>
-                <Divider sx={{ bgcolor: '#c5a34f', mb: 2 }} />
-
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                      Email:
+            <DialogContent dividers sx={{ p: 3, bgcolor: '#fefefefe', color: '#b00000' }}>
+              <Grid container spacing={3}>
+                {/* Driver Profile Photo */}
+                {selectedDriver.images?.driver && (
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: '#c5a34f' }}>
+                      Driver Photo:
                     </Typography>
-                    <Typography>{selectedDriver.email}</Typography>
+                    <Paper elevation={3} sx={{ p: 1, borderRadius: 2, display: 'flex', justifyContent: 'center' }}>
+                      <img src={selectedDriver.images.driver} alt="Driver" style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8 }} />
+                    </Paper>
                   </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                      Phone:
+                )}
+                {/* Driver License Photo */}
+                {selectedDriver.images?.license && (
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: '#c5a34f' }}>
+                      Driver License Photo:
                     </Typography>
-                    <Typography>{selectedDriver.phone}</Typography>
+                    <Paper elevation={3} sx={{ p: 1, borderRadius: 2, display: 'flex', justifyContent: 'center' }}>
+                      <img src={selectedDriver.images.license} alt="License" style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8 }} />
+                    </Paper>
                   </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                      Join Date:
+                )}
+                {/* Vehicle Photo */}
+                {selectedDriver.images?.car && (
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: '#c5a34f' }}>
+                      Vehicle Photo:
                     </Typography>
-                    <Typography>{selectedDriver.joinDate}</Typography>
+                    <Paper elevation={3} sx={{ p: 1, borderRadius: 2, display: 'flex', justifyContent: 'center' }}>
+                      <img src={selectedDriver.images.car} alt="Car" style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8 }} />
+                    </Paper>
                   </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                      Rating:
+                )}
+                {/* ID Photo */}
+                {selectedDriver.images?.id && (
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: '#c5a34f' }}>
+                      ID Document Photo:
                     </Typography>
-                    <Typography>{selectedDriver.rating}/5.0</Typography>
+                    <Paper elevation={3} sx={{ p: 1, borderRadius: 2, display: 'flex', justifyContent: 'center' }}>
+                      <img src={selectedDriver.images.id} alt="ID" style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8 }} />
+                    </Paper>
                   </Grid>
-                </Grid>
-
-                {/* Vehicle Information Sub-section */}
-                <Typography variant="h6" gutterBottom sx={{
-                  color: '#c5a34f',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  mt: 3
-                }}>
-                  <DirectionsCarIcon /> Vehicle Information
-                </Typography>
-                <Divider sx={{ bgcolor: '#b80000', mb: 2 }} />
-
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                      Vehicle:
-                    </Typography>
-                    <Typography>{selectedDriver.vehicle}</Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                      Registration:
-                    </Typography>
-                    <Typography>{selectedDriver.registration}</Typography>
-                  </Grid>
-                </Grid>
-
-                {/* Documents Sub-section */}
-                <Typography variant="h6" gutterBottom sx={{
-                  color: '#b80000',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  mt: 3
-                }}>
-                  <Description /> Documents
-                </Typography>
-                <Divider sx={{ bgcolor: '#b80000', mb: 2 }} />
-
-                <Typography>
-                  Status: <Badge
-                    color={selectedDriver.documents === 'Verified' ? 'success' :
-                      selectedDriver.documents === 'Uploaded' ? 'warning' : 'error'}
+                )}
+              </Grid>
+              <Divider sx={{ my: 3, bgcolor: '#c5a34f' }} />
+              <Typography variant="h6" sx={{ mb: 2, color: '#b00000' }}>Application Details</Typography>
+              <Typography variant="body1" sx={{ mb: 1, color: '#b00000' }}>
+                <Email sx={{ fontSize: 20, verticalAlign: 'middle', mr: 1 }} />
+                Email: <Typography component="span" sx={{ fontWeight: 'bold' }}>{selectedDriver.email}</Typography>
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 1, color: '#b00000' }}>
+                <Phone sx={{ fontSize: 20, verticalAlign: 'middle', mr: 1 }} />
+                Phone: <Typography component="span" sx={{ fontWeight: 'bold' }}>{selectedDriver.phone}</Typography>
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 1, color: '#b00000' }}>
+                <Person sx={{ fontSize: 20, verticalAlign: 'middle', mr: 1 }} />
+                ID Number: <Typography component="span" sx={{ fontWeight: 'bold' }}>{selectedDriver.idNumber}</Typography>
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 1, color: '#b00000' }}>
+                <Description sx={{ fontSize: 20, verticalAlign: 'middle', mr: 1 }} />
+                Address: <Typography component="span" sx={{ fontWeight: 'bold' }}>{selectedDriver.address}</Typography>
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 1, color: '#b00000' }}>
+                <DirectionsCarIcon sx={{ fontSize: 20, verticalAlign: 'middle', mr: 1 }} />
+                Vehicle Type: <Typography component="span" sx={{ fontWeight: 'bold' }}>{selectedDriver.vehicle}</Typography>
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 1, color: '#b00000' }}>
+                <CheckCircle sx={{ fontSize: 20, verticalAlign: 'middle', mr: 1 }} />
+                Current Status:{' '}
+                <Chip
+                  label={selectedDriver.status}
+                  size="small"
+                  icon={
+                    selectedDriver.status === 'Approved' ? <CheckCircle /> :
+                    selectedDriver.status === 'Pending' ? <PendingActions /> :
+                    selectedDriver.status === 'Rejected' ? <Cancel /> :
+                    null
+                  }
+                  color={
+                    selectedDriver.status === 'Approved' ? 'success' :
+                    selectedDriver.status === 'Pending' ? 'warning' :
+                    selectedDriver.status === 'Rejected' ? 'error' :
+                    'default'
+                  }
+                  sx={{ fontWeight: 'bold', ml: 1 }}
+                />
+              </Typography>
+              <Box display="flex" alignItems="center" sx={{ mb: 1 }}>
+                <Typography variant="body1" sx={{ color: '#b00000' }}>
+                  <Badge
+                    color={selectedDriver.documents === 'Verified' ? 'success' : 'warning'}
                     variant="dot"
                     sx={{ mr: 1 }}
                   >
@@ -677,19 +506,38 @@ export default function Drivers() {
               </Button>
               {/* Approve Driver Button (conditionally rendered) */}
               {selectedDriver.status === 'Pending' && (
-                <Button
-                  variant="contained"
-                  sx={{
-                    bgcolor: '#c5a34f',
-                    color: '#000',
-                    '&:hover': {
-                      bgcolor: '#c5a34f',
-                    }
-                  }}
-                  startIcon={<CheckCircle />}
-                >
-                  Approve Driver
-                </Button>
+                <>
+                  <Button
+                    variant="contained"
+                    sx={{
+                      bgcolor: 'success.main',
+                      color: '#fff',
+                      '&:hover': {
+                        bgcolor: 'success.dark',
+                      },
+                      ml: 1 // Add margin to separate from Close button
+                    }}
+                    startIcon={<CheckCircle />}
+                    onClick={handleApprove} // Call approve function
+                  >
+                    Approve Driver
+                  </Button>
+                  <Button
+                    variant="contained"
+                    sx={{
+                      bgcolor: 'error.main',
+                      color: '#fff',
+                      '&:hover': {
+                        bgcolor: 'error.dark',
+                      },
+                      ml: 1 // Add margin to separate from Approve button
+                    }}
+                    startIcon={<Cancel />}
+                    onClick={handleReject} // Call reject function
+                  >
+                    Reject Driver
+                  </Button>
+                </>
               )}
             </DialogActions>
           </>
