@@ -12,24 +12,34 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { ref, onValue, update, push } from 'firebase/database';
 
+/**
+ * Drivers Component - Main component for managing driver applications and approvals
+ * Features:
+ * - View all driver applications
+ * - Filter and search drivers
+ * - Approve/Reject applications
+ * - Add new drivers manually
+ * - View driver details
+ */
 export default function Drivers() {
-  const { driverId } = useParams();
-  const navigate = useNavigate();
+  // Router hooks for navigation and params
+  const { driverId } = useParams(); // Get driver ID from URL if present
+  const navigate = useNavigate(); // Navigation function
 
   // State management
-  const [drivers, setDrivers] = useState([]);
-  const [selectedDriver, setSelectedDriver] = useState(null);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [openAddDialog, setOpenAddDialog] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('All');
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [sortConfig, setSortConfig] = useState({
+  const [drivers, setDrivers] = useState([]); // List of all drivers
+  const [selectedDriver, setSelectedDriver] = useState(null); // Currently selected driver
+  const [openDialog, setOpenDialog] = useState(false); // Controls detail dialog visibility
+  const [openAddDialog, setOpenAddDialog] = useState(false); // Controls add driver dialog visibility
+  const [searchTerm, setSearchTerm] = useState(''); // Search term for filtering
+  const [filterStatus, setFilterStatus] = useState('All'); // Current status filter
+  const [anchorEl, setAnchorEl] = useState(null); // Anchor for filter menu
+  const [sortConfig, setSortConfig] = useState({ // Current sort configuration
     key: 'name',
     direction: 'ascending'
   });
-  const [loadingAction, setLoadingAction] = useState(false);
-  const [newDriver, setNewDriver] = useState({
+  const [loadingAction, setLoadingAction] = useState(false); // Loading state for actions
+  const [newDriver, setNewDriver] = useState({ // State for new driver form
     fullName: '',
     email: '',
     phoneNumber: '',
@@ -40,8 +50,9 @@ export default function Drivers() {
     status: 'Approved'
   });
 
-  // Fetch drivers data
+  // Fetch drivers data from Firebase
   useEffect(() => {
+    // If driverId is in URL, fetch that specific driver
     if (driverId) {
       const driverRef = ref(db, `driverApplications/${driverId}`);
       onValue(driverRef, (snapshot) => {
@@ -60,11 +71,12 @@ export default function Drivers() {
             joinDate: data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'N/A',
             images: data.images || {}
           });
-          setOpenDialog(true);
+          setOpenDialog(true); // Automatically open dialog for this driver
         }
       });
     }
 
+    // Fetch all driver applications
     const driversRef = ref(db, 'driverApplications');
     onValue(driversRef, (snapshot) => {
       const driversData = [];
@@ -84,9 +96,9 @@ export default function Drivers() {
           images: driver.images || {}
         });
       });
-      setDrivers(driversData);
+      setDrivers(driversData); // Update drivers state
     });
-  }, [driverId]);
+  }, [driverId]); // Re-run when driverId changes
 
   // Dialog handlers
   const handleOpenDialog = (driver) => {
@@ -96,18 +108,24 @@ export default function Drivers() {
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
-    if (driverId) navigate('/dashboard');
+    if (driverId) navigate('/dashboard'); // If came from direct link, navigate back
   };
 
-  // Driver approval/rejection
+  /**
+   * Approve a driver application
+   * - Updates status in driverApplications
+   * - Creates entry in approved drivers collection
+   */
   const handleApprove = async () => {
     if (!selectedDriver) return;
     setLoadingAction(true);
     try {
+      // Update application status
       await update(ref(db, `driverApplications/${selectedDriver.id}`), { 
         status: 'Approved' 
       });
       
+      // Add to approved drivers
       await update(ref(db, `drivers/${selectedDriver.id}`), {
         fullName: selectedDriver.name,
         email: selectedDriver.email,
@@ -126,6 +144,10 @@ export default function Drivers() {
     }
   };
 
+  /**
+   * Reject a driver application
+   * - Updates status in driverApplications
+   */
   const handleReject = async () => {
     if (!selectedDriver) return;
     setLoadingAction(true);
@@ -144,10 +166,10 @@ export default function Drivers() {
   const handleFilterClick = (event) => setAnchorEl(event.currentTarget);
   const handleFilterClose = (status) => {
     setAnchorEl(null);
-    if (status) setFilterStatus(status);
+    if (status) setFilterStatus(status); // Update filter if status was selected
   };
 
-  // Sorting
+  // Sorting handler
   const handleRequestSort = (property) => {
     const isAsc = sortConfig.key === property && sortConfig.direction === 'ascending';
     setSortConfig({ 
@@ -169,6 +191,11 @@ export default function Drivers() {
     }));
   };
 
+  /**
+   * Save new driver to database
+   * - Validates all required fields
+   * - Adds to both driverApplications and drivers collections
+   */
   const handleSaveNewDriver = async () => {
     // Validate all fields
     if (!newDriver.fullName || !newDriver.email || !newDriver.phoneNumber || 
@@ -183,16 +210,19 @@ export default function Drivers() {
       const newDriverRef = ref(db, 'driverApplications');
       const newDriverKey = push(newDriverRef).key;
       
+      // Add to applications
       await update(ref(db, `driverApplications/${newDriverKey}`), {
         ...newDriver,
         createdAt: new Date().toISOString()
       });
       
+      // Also add to approved drivers
       await update(ref(db, `drivers/${newDriverKey}`), {
         ...newDriver,
         createdAt: new Date().toISOString()
       });
       
+      // Reset form and close dialog
       setOpenAddDialog(false);
       setNewDriver({
         fullName: '',
@@ -211,7 +241,7 @@ export default function Drivers() {
     }
   };
 
-  // Memoized sorted and filtered drivers
+  // Memoized sorted and filtered drivers for performance optimization
   const sortedDrivers = useMemo(() => {
     return [...drivers].sort((a, b) => {
       if (a[sortConfig.key] < b[sortConfig.key]) {
@@ -248,6 +278,7 @@ export default function Drivers() {
 
       {/* Search and Filter Controls */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap' }}>
+        {/* Search Input */}
         <TextField
           label="Search Drivers"
           variant="outlined"
@@ -275,6 +306,7 @@ export default function Drivers() {
         />
 
         <Box>
+          {/* Status Filter Dropdown */}
           <Button
             variant="outlined"
             onClick={handleFilterClick}
@@ -298,6 +330,7 @@ export default function Drivers() {
             <MenuItem onClick={() => handleFilterClose('Rejected')}>Rejected</MenuItem>
           </Menu>
 
+          {/* Add New Driver Button */}
           <Button
             variant="contained"
             startIcon={<Add />}
@@ -320,6 +353,7 @@ export default function Drivers() {
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: '#000000' }}>
+              {/* Table Headers with sort indicators */}
               {[
                 { key: 'name', label: 'Driver Name' },
                 { key: 'email', label: 'Email' },
@@ -347,6 +381,7 @@ export default function Drivers() {
             </TableRow>
           </TableHead>
           
+          {/* Table Body with driver data */}
           <TableBody>
             {filteredDrivers.length > 0 ? (
               filteredDrivers.map((driver) => (
@@ -391,6 +426,7 @@ export default function Drivers() {
                   </TableCell>
                   <TableCell sx={{ color: '#b00000' }}>{driver.joinDate}</TableCell>
                   <TableCell>
+                    {/* Action Buttons */}
                     <Button
                       size="small"
                       variant="outlined"
@@ -403,6 +439,7 @@ export default function Drivers() {
                       View
                     </Button>
                     
+                    {/* Show Approve/Reject only for pending applications */}
                     {driver.status === 'Pending' && (
                       <>
                         <Button
@@ -456,6 +493,7 @@ export default function Drivers() {
         {selectedDriver && (
           <>
             <DialogContent dividers sx={{ p: 3, bgcolor: '#fefefefe', color: '#b00000' }}>
+              {/* Display driver images if available */}
               <Grid container spacing={3}>
                 {selectedDriver.images?.driver && (
                   <Grid item xs={12} md={6}>
@@ -520,6 +558,7 @@ export default function Drivers() {
 
               <Divider sx={{ my: 3 }} />
 
+              {/* Driver Information Section */}
               <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, color: '#b00000' }}>
                 Driver Information
               </Typography>
@@ -589,6 +628,7 @@ export default function Drivers() {
               </Grid>
             </DialogContent>
 
+            {/* Dialog Action Buttons */}
             <DialogActions sx={{ p: 2 }}>
               {selectedDriver.status === 'Pending' && (
                 <>

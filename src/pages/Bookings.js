@@ -14,7 +14,7 @@ import {
 import { db } from '../firebase';
 import { ref, onValue, update } from 'firebase/database';
 
-// Status configurations
+// Status configurations - defines colors and icons for different booking statuses
 const statusColors = {
   Pending: 'warning',
   'In Progress': 'info',
@@ -30,26 +30,28 @@ const statusIcons = {
 };
 
 export default function Bookings() {
-  // State management
-  const [bookings, setBookings] = useState([]);
-  const [selectedBooking, setSelectedBooking] = useState(null);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('All');
-  const [loading, setLoading] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  // State management for the component
+  const [bookings, setBookings] = useState([]); // Stores all bookings data
+  const [selectedBooking, setSelectedBooking] = useState(null); // Currently selected booking for details view
+  const [openDialog, setOpenDialog] = useState(false); // Controls visibility of details dialog
+  const [anchorEl, setAnchorEl] = useState(null); // Anchor for filter menu
+  const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' }); // Current sort configuration
+  const [searchTerm, setSearchTerm] = useState(''); // Search term for filtering
+  const [filterStatus, setFilterStatus] = useState('All'); // Current status filter
+  const [loading, setLoading] = useState(false); // Loading state for status changes
+  const [isLoading, setIsLoading] = useState(true); // Initial data loading state
 
-  // Fetch bookings from Firebase
+  // Fetch bookings from Firebase on component mount
   useEffect(() => {
     const bookingsRef = ref(db, 'trips');
     setIsLoading(true);
     
+    // Set up real-time listener for bookings data
     const unsubscribe = onValue(bookingsRef, (snapshot) => {
       const bookingsData = [];
       snapshot.forEach((childSnapshot) => {
         const booking = childSnapshot.val();
+        // Format booking data for display
         bookingsData.push({
           id: childSnapshot.key,
           customer: booking.passengerName || 'Not specified',
@@ -70,31 +72,35 @@ export default function Bookings() {
       setIsLoading(false);
     });
 
+    // Clean up listener on component unmount
     return () => unsubscribe();
   }, []);
 
-  // Handlers
+  // Menu handlers
   const handleClick = (event) => setAnchorEl(event.currentTarget);
   const handleClose = () => setAnchorEl(null);
   
+  // Sorting handler - toggles between ascending and descending
   const handleSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
     setSortConfig({ key, direction });
   };
 
+  // Opens dialog with booking details
   const handleViewBooking = (booking) => {
     setSelectedBooking(booking);
     setOpenDialog(true);
   };
 
+  // Updates booking status in Firebase
   const handleStatusChange = async (newStatus) => {
     if (!selectedBooking) return;
     setLoading(true);
     try {
       await update(ref(db, `trips/${selectedBooking.id}`), { 
         status: newStatus,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString() // Track when status was changed
       });
       setOpenDialog(false);
     } catch (error) {
@@ -104,19 +110,21 @@ export default function Bookings() {
     }
   };
 
+  // Simulates data refresh
   const handleRefresh = () => {
     setIsLoading(true);
     // The onValue listener will automatically refresh the data
     setTimeout(() => setIsLoading(false), 1000);
   };
 
-  // Sorting and filtering
+  // Apply sorting to bookings
   const sortedBookings = [...bookings].sort((a, b) => {
     if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
     if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
   });
 
+  // Apply search and status filters to sorted bookings
   const filteredBookings = sortedBookings.filter(booking => {
     const matchesSearch =
       booking.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -128,6 +136,7 @@ export default function Bookings() {
     return matchesSearch && matchesStatus;
   });
 
+  // Loading state UI
   if (isLoading) {
     return (
       <Box sx={{ 
@@ -142,6 +151,7 @@ export default function Bookings() {
     );
   }
 
+  // Main component render
   return (
     <Box sx={{ bgcolor: '#fefefefe', color: '#c5a34f', minHeight: '100vh', p: 3 }}>
       {/* Header Section */}
@@ -150,6 +160,7 @@ export default function Bookings() {
           Bookings Management
         </Typography>
 
+        {/* Action buttons */}
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Tooltip title="Refresh data">
             <IconButton sx={{ color: '#b80000' }} onClick={handleRefresh}>
@@ -157,6 +168,7 @@ export default function Bookings() {
             </IconButton>
           </Tooltip>
 
+          {/* Status filter dropdown */}
           <Button 
             variant="outlined" 
             onClick={handleClick} 
@@ -192,7 +204,7 @@ export default function Bookings() {
         </Box>
       </Box>
 
-      {/* Search Text Field */}
+      {/* Search input */}
       <TextField
         variant="outlined"
         placeholder="Search bookings..."
@@ -222,6 +234,7 @@ export default function Bookings() {
         <Table>
           <TableHead>
             <TableRow>
+              {/* Table headers with sorting functionality */}
               {['Booking ID', 'Customer', 'Date', 'Pickup', 'Destination', 'Amount', 'Status', 'Actions'].map((header, index) => (
                 <TableCell 
                   key={header} 
@@ -244,6 +257,7 @@ export default function Bookings() {
             </TableRow>
           </TableHead>
           <TableBody>
+            {/* Table rows with booking data */}
             {filteredBookings.length > 0 ? (
               filteredBookings.map((booking) => (
                 <TableRow key={booking.id} hover>
@@ -313,6 +327,7 @@ export default function Bookings() {
                 Trip Information
               </Typography>
               
+              {/* Booking details grid layout */}
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <Typography>
@@ -403,6 +418,7 @@ export default function Bookings() {
                 </Grid>
               </Grid>
             </DialogContent>
+            {/* Dialog action buttons based on booking status */}
             <DialogActions sx={{ p: 2 }}>
               {selectedBooking.status === 'Pending' && (
                 <>
