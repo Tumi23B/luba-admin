@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -19,10 +19,14 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
-  Grid
+  Grid,
+  CircularProgress,
+  Alert,
+  TextField
 } from '@mui/material';
 import {
   Verified as VerifiedIcon,
+  Email as EmailIcon,
   OfflineBolt as OnlineIcon,
   DirectionsCar as VehicleIcon,
   Star as StarIcon,
@@ -34,214 +38,147 @@ import {
   GpsFixed as LocationIcon,
   Work as WorkIcon,
   Schedule as TimeIcon,
+  LocationOn as MapIcon
 } from '@mui/icons-material';
+import { db } from '../firebase';
+import { ref, onValue, query, orderByChild, equalTo, limitToLast } from 'firebase/database';
 
 const statusConfig = {
-  Verified: { icon: <VerifiedIcon />, color: 'success' },
-  'Pending Verification': { icon: <VerifiedIcon />, color: 'warning' },
-  Suspended: { icon: <VerifiedIcon />, color: 'error' },
+  verified: { icon: <VerifiedIcon />, color: 'success', label: 'Verified' },
+  pending: { icon: <VerifiedIcon />, color: 'warning', label: 'Pending Verification' },
+  suspended: { icon: <VerifiedIcon />, color: 'error', label: 'Suspended' },
+  active: { icon: <VerifiedIcon />, color: 'success', label: 'Active' },
+  inactive: { icon: <VerifiedIcon />, color: 'default', label: 'Inactive' }
 };
 
-const driversData = [
-  {
-    id: 1,
-    name: 'John Smith',
-    phone: '+27 234342345',
-    status: 'Verified',
-    address: '123 Main St, Anytown, SA',
-    isOnline: true,
-    joinDate: '2023-01-15',
-    rating: 4.8,
-    vehicle: 'Toyota Hilux',
-    registration: 'JJ 10 NZ GP',
-    currentJob: {
-      description: 'Office relocation to Sandton'
-    },
-    documents: [
-      { name: 'Driver License', url: '#' },
-      { name: 'Vehicle Insurance', url: '#' }
-    ]
-  },
-  {
-    id: 2,
-    name: 'Maria Bodesta',
-    phone: '+277363523',
-    status: 'Verified',
-    address: '456 Oak Avenue, Thokoza, SA',
-    isOnline: false,
-    joinDate: '2023-02-20',
-    rating: 4.9,
-    vehicle: 'Vw Transporter',
-    registration: 'CK 40 KK GP',
-    currentJob: null,
-    documents: [
-      { name: 'Driver License', url: '#' },
-      { name: 'Vehicle Registration', url: '#' }
-    ]
-  },
-  {
-    id: 3,
-    name: 'David Johnson',
-    phone: '0894567845',
-    status: 'Pending Verification',
-    address: '789 Pine Road, Cape Town, SA',
-    isOnline: true,
-    joinDate: '2023-03-10',
-    rating: 4.5,
-    vehicle: 'Ford Transit',
-    registration: 'CAA 23453',
-    currentJob: {
-      description: 'Corporate event shuttle service downtown'
-    },
-    documents: [
-      { name: 'Driver License', url: '#' }
-    ]
-  },
-  {
-    id: 4,
-    name: 'Sarah Williams',
-    phone: '0834567890',
-    status: 'Verified',
-    address: '321 Elm Street, Durban, SA',
-    isOnline: true,
-    joinDate: '2023-04-05',
-    rating: 4.7,
-    vehicle: 'Mercedes Benz Sprinter',
-    registration: 'ND 54345',
-    currentJob: {
-      description: 'Family Trip'
-    },
-    documents: [
-      { name: 'Driver License', url: '#' },
-      { name: 'Commercial Permit', url: '#' }
-    ]
-  },
-  {
-    id: 5,
-    name: 'Michael Brown',
-    phone: '0834568765',
-    status: 'Suspended',
-    address: '654 Maple Lane, Umhlanga, SA',
-    isOnline: false,
-    joinDate: '2023-01-30',
-    rating: 3.9,
-    vehicle: 'Ford Ranger',
-    registration: 'NU 12345',
-    currentJob: null,
-    documents: [
-      { name: 'Driver License', url: '#' }
-    ]
-  }
-];
+const jobStatusConfig = {
+  pending: { color: 'warning', label: 'Pending' },
+  in_progress: { color: 'info', label: 'In Progress' },
+  completed: { color: 'success', label: 'Completed' },
+  cancelled: { color: 'error', label: 'Cancelled' }
+};
 
 const DriverCard = ({ driver, onClick }) => {
-  const status = statusConfig[driver.status];
+  const status = statusConfig[driver.status] || statusConfig.pending;
+  const currentJobStatus = driver.currentJob ? 
+    jobStatusConfig[driver.currentJob.status] || { color: 'default', label: 'Unknown' } 
+    : null;
 
   return (
-    <Card
-      sx={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        transition: 'all 0.2s ease',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-          cursor: 'pointer'
-        },
-      }}
-      onClick={onClick}
-      elevation={1}
-    >
-      <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+    <Card onClick={onClick} sx={{ 
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      transition: 'all 0.2s ease',
+      '&:hover': {
+        transform: 'translateY(-2px)',
+        boxShadow: 3,
+        cursor: 'pointer'
+      }
+    }}>
+      <CardContent sx={{ flexGrow: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Avatar
-            sx={{
-              width: 48,
-              height: 48,
-              bgcolor: '#c5a34f',
-              color: '#fefefefe',
-              mr: 2,
-            }}
-          >
-            {driver.name.split(' ').map(n => n[0]).join('')}
+          <Avatar src={driver.photoURL} sx={{ 
+            width: 56, 
+            height: 56, 
+            bgcolor: '#c5a34f',
+            mr: 2 
+          }}>
+            {driver.name?.charAt(0)}
           </Avatar>
           <Box>
             <Typography variant="subtitle1" fontWeight="bold">
-              {driver.name}
+              {driver.fullname || 'No name'}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
               <Chip
                 icon={status.icon}
-                label={driver.status}
+                label={status.label}
                 size="small"
                 color={status.color}
                 sx={{ mr: 1 }}
               />
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <StarIcon sx={{ color: '#b80000', fontSize: '1rem', mr: 0.5 }} />
-                <Typography variant="body2">{driver.rating}</Typography>
+                <Typography variant="body2">{driver.rating?.toFixed(1) || 'N/A'}</Typography>
               </Box>
             </Box>
           </Box>
         </Box>
 
-        <Stack spacing={1.5} sx={{ mb: 2, flexGrow: 1 }}>
+        <Stack spacing={1.5} sx={{ mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <OnlineIcon
-              sx={{
-                color: driver.isOnline ? 'success.main' : 'text.disabled',
-                mr: 1,
-                fontSize: '1rem',
-              }}
-            />
+            <EmailIcon sx={{ color: 'text.secondary', mr: 1, fontSize: '1rem' }} />
             <Typography variant="body2">
-              {driver.isOnline ? 'Online now' : 'Offline'}
+              {driver.email || 'No email'}
             </Typography>
           </Box>
-
+          
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <PhoneIcon sx={{ color: 'text.secondary', mr: 1, fontSize: '1rem' }} />
+            <Typography variant="body2">
+              {driver.phoneNumber || 'No phone'}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <MapIcon sx={{ color: 'text.secondary', mr: 1, fontSize: '1rem' }} />
+            <Typography variant="body2" noWrap>
+              {driver.address || 'No address'}
+            </Typography>
+          </Box>
+          
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <VehicleIcon sx={{ color: 'text.secondary', mr: 1, fontSize: '1rem' }} />
             <Typography variant="body2">
-              {driver.vehicle} ({driver.registration})
+              {driver.vehicleType || 'No vehicle'} ({driver.vehicleRegistration || 'N/A'})
             </Typography>
           </Box>
         </Stack>
 
         {driver.currentJob ? (
-          <Paper
-            elevation={0}
-            sx={{
-              p: 1,
-              backgroundColor: 'action.hover',
-              borderRadius: 1,
-            }}
-          >
-            <Typography variant="caption" fontWeight="bold" display="block" gutterBottom>
-              Active Job
-            </Typography>
+          <Paper elevation={0} sx={{ 
+            p: 1.5, 
+            backgroundColor: 'action.hover',
+            borderRadius: 1,
+            borderLeft: `4px solid ${currentJobStatus.color === 'default' ? '#c5a34f' : ''}`
+          }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold">
+                Current Job
+              </Typography>
+              <Chip 
+                label={currentJobStatus.label} 
+                size="small" 
+                color={currentJobStatus.color}
+              />
+            </Box>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              {driver.currentJob.description.length > 50
-                ? `${driver.currentJob.description.substring(0, 50)}...`
-                : driver.currentJob.description}
+              {driver.currentJob.description || 'No description'}
             </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="caption">
+                {driver.currentJob.client || 'No client'}
+              </Typography>
+              <Typography variant="caption">
+                {driver.currentJob.location || 'No location'}
+              </Typography>
+            </Box>
             <LinearProgress
               variant="determinate"
-              value={70}
-              sx={{ height: 4, borderRadius: 2 }}
+              value={driver.currentJob.progress || 0}
+              sx={{ height: 6, borderRadius: 3, mt: 1.5 }}
+              color={currentJobStatus.color === 'default' ? 'primary' : currentJobStatus.color}
             />
           </Paper>
         ) : (
-          <Paper
-            elevation={0}
-            sx={{
-              p: 1,
-              backgroundColor: 'action.hover',
-              borderRadius: 1,
-            }}
-          >
-            <Typography variant="caption" fontWeight="bold">
-              Available for assignments
+          <Paper elevation={0} sx={{ 
+            p: 1.5, 
+            backgroundColor: 'action.hover',
+            borderRadius: 1
+          }}>
+            <Typography variant="body2" color="text.secondary">
+              No current job assignment
             </Typography>
           </Paper>
         )}
@@ -251,157 +188,386 @@ const DriverCard = ({ driver, onClick }) => {
 };
 
 const DriverDetails = ({ driver, onClose }) => {
+  const [recentJobs, setRecentJobs] = useState([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    if (!driver?.id) return;
+
+    const jobsRef = query(
+      ref(db, 'jobs'),
+      orderByChild('driverId'),
+      equalTo(driver.id),
+      limitToLast(5)
+    );
+
+    const unsubscribe = onValue(jobsRef, (snapshot) => {
+      const jobs = [];
+      snapshot.forEach((child) => {
+        jobs.push({
+          id: child.key,
+          ...child.val()
+        });
+      });
+      setRecentJobs(jobs.sort((a, b) => b.timestamp - a.timestamp));
+      setLoadingJobs(false);
+    });
+
+    return () => unsubscribe();
+  }, [driver?.id]);
+
+  const filteredJobs = recentJobs.filter(job =>
+    job.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    job.client?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    job.status?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const status = statusConfig[driver.status] || statusConfig.pending;
+
   return (
-    <Dialog
-      open={true}
-      onClose={onClose}
-      fullWidth
-      maxWidth="sm"
-      PaperProps={{
-        sx: {
-          borderRadius: 2,
-        },
-      }}
-    >
-      <DialogTitle sx={{ fontWeight: 'bold' }}>
-        Driver Details
-        <Chip
-          icon={statusConfig[driver.status].icon}
-          label={driver.status}
-          color={statusConfig[driver.status].color}
-          size="small"
-          sx={{ ml: 2 }}
-        />
+    <Dialog open fullWidth maxWidth="md" onClose={onClose}>
+      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          Driver Details
+          <Chip
+            icon={status.icon}
+            label={status.label}
+            color={status.color}
+            size="small"
+            sx={{ ml: 2 }}
+          />
+        </Box>
+        <Button onClick={onClose}>Close</Button>
       </DialogTitle>
-      
+
       <DialogContent dividers>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <Avatar
-            sx={{
-              width: 64,
-              height: 64,
-              bgcolor: '#c5a34f',
-              color: 'white',
-              mr: 3,
-              fontSize: '1.5rem',
-            }}
-          >
-            {driver.name.split(' ').map(n => n[0]).join('')}
-          </Avatar>
-          <Box>
-            <Typography variant="h6" fontWeight="bold">
-              {driver.name}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-              <StarIcon sx={{ color: '#b80000', mr: 0.5 }} />
-              <Typography>{driver.rating}</Typography>
-              <Typography variant="body2" sx={{ ml: 1, color: 'text.secondary' }}>
-                Joined {driver.joinDate}
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
+              <Avatar
+                src={driver.photoURL}
+                sx={{ 
+                  width: 120, 
+                  height: 120, 
+                  mb: 2,
+                  bgcolor: '#c5a34f',
+                  fontSize: '2.5rem'
+                }}
+              >
+                {driver.name?.charAt(0)}
+              </Avatar>
+              <Typography variant="h6" fontWeight="bold" textAlign="center">
+                {driver.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" textAlign="center">
+                {driver.driverId || 'ID: N/A'}
               </Typography>
             </Box>
-          </Box>
-        </Box>
 
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-              Contact Information
-            </Typography>
-            <List dense>
-              <ListItem>
-                <ListItemIcon sx={{ minWidth: 36 }}>
-                  <PhoneIcon color="#b80000" />
-                </ListItemIcon>
-                <ListItemText primary={driver.phone} />
-              </ListItem>
-              <ListItem>
-                <ListItemIcon sx={{ minWidth: 36 }}>
-                  <AddressIcon color="#b80000" />
-                </ListItemIcon>
-                <ListItemText primary={driver.address} />
-              </ListItem>
-            </List>
+            <Paper elevation={0} sx={{ p: 2, mb: 3, backgroundColor: 'background.paper' }}>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                Contact Information
+              </Typography>
+              <List dense>
+                <ListItem>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <EmailIcon color="primary" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={driver.email || 'No email'} 
+                    secondary="Email" 
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <PhoneIcon color="primary" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={driver.phoneNumber || 'No phone'} 
+                    secondary="Phone" 
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <AddressIcon color="primary" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={driver.address || 'No address'} 
+                    secondary="Address" 
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <LocationIcon color="primary" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={driver.city ? `${driver.city}, ${driver.country}` : 'No location'} 
+                    secondary="Location" 
+                  />
+                </ListItem>
+              </List>
+            </Paper>
+
+            <Paper elevation={0} sx={{ p: 2, backgroundColor: 'background.paper' }}>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                Vehicle Information
+              </Typography>
+              <List dense>
+                <ListItem>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <VehicleIcon color="primary" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={driver.vehicleType || 'No vehicle'} 
+                    secondary="Vehicle Type" 
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <DocumentIcon color="primary" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={driver.vehicleRegistration || 'N/A'} 
+                    secondary="Registration" 
+                  />
+                </ListItem>
+              </List>
+            </Paper>
           </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-              Vehicle Information
-            </Typography>
-            <List dense>
-              <ListItem>
-                <ListItemIcon sx={{ minWidth: 36 }}>
-                  <VehicleIcon color="#b80000" />
-                </ListItemIcon>
-                <ListItemText primary={driver.vehicle} />
-              </ListItem>
-              <ListItem>
-                <ListItemIcon sx={{ minWidth: 36 }}>
-                  <LocationIcon color="#b80000" />
-                </ListItemIcon>
-                <ListItemText primary={driver.registration} />
-              </ListItem>
-            </List>
+
+          <Grid item xs={12} md={8}>
+            {driver.currentJob && (
+              <Paper elevation={0} sx={{ p: 2, mb: 3, backgroundColor: 'background.paper' }}>
+                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                  Current Job Details
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Job Description
+                    </Typography>
+                    <Typography variant="body1">
+                      {driver.currentJob.description || 'No description'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Client
+                    </Typography>
+                    <Typography variant="body1">
+                      {driver.currentJob.client || 'No client'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Location
+                    </Typography>
+                    <Typography variant="body1">
+                      {driver.currentJob.location || 'No location'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Status
+                    </Typography>
+                    <Chip 
+                      label={jobStatusConfig[driver.currentJob.status]?.label || 'Unknown'} 
+                      color={jobStatusConfig[driver.currentJob.status]?.color || 'default'}
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Progress
+                    </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={driver.currentJob.progress || 0}
+                      sx={{ height: 8, borderRadius: 4 }}
+                      color={jobStatusConfig[driver.currentJob.status]?.color || 'primary'}
+                    />
+                    <Typography variant="caption" display="block" textAlign="right">
+                      {driver.currentJob.progress || 0}% complete
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+            )}
+
+            <Paper elevation={0} sx={{ p: 2, backgroundColor: 'background.paper' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Recent Job History
+                </Typography>
+                <TextField
+                  size="small"
+                  placeholder="Search jobs..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  sx={{ width: 200 }}
+                />
+              </Box>
+
+              {loadingJobs ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : filteredJobs.length > 0 ? (
+                <List dense>
+                  {filteredJobs.map((job) => {
+                    const jobStatus = jobStatusConfig[job.status] || { color: 'default', label: 'Unknown' };
+                    return (
+                      <ListItem key={job.id} divider>
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                          <WorkIcon color={jobStatus.color} />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={job.description || 'No description'}
+                          secondary={
+                            <>
+                              <Typography component="span" variant="body2" color="text.primary">
+                                {job.client || 'No client'}
+                              </Typography>
+                              {` — ${jobStatus.label} • ${new Date(job.timestamp).toLocaleDateString()}`}
+                            </>
+                          }
+                        />
+                        <Chip
+                          label={`${job.progress || 0}%`}
+                          size="small"
+                          color={jobStatus.color}
+                          variant="outlined"
+                        />
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>
+                  {searchTerm ? 'No matching jobs found' : 'No job history available'}
+                </Typography>
+              )}
+            </Paper>
           </Grid>
         </Grid>
-
-        <Divider sx={{ my: 2 }} />
-
-        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-          Documents
-        </Typography>
-        <Stack spacing={1}>
-          {driver.documents.map((doc, index) => (
-            <Button
-              key={index}
-              variant="outlined"
-              startIcon={<DocumentIcon />}
-              fullWidth
-              sx={{ justifyContent: 'flex-start', color: '#b80000', borderColor: '#c5a34' }}
-              onClick={() => window.open(doc.url, '_blank')}
-            >
-              {doc.name}
-            </Button>
-          ))}
-        </Stack>
       </DialogContent>
-      
-      <DialogActions>
-        <Button onClick={onClose} color="primary">
-          Close
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 };
 
 const DriverManagement = () => {
+  const [drivers, setDrivers] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const driversRef = ref(db, 'drivers');
+    
+    const unsubscribe = onValue(driversRef, (snapshot) => {
+      try {
+        const driversData = [];
+        const promises = [];
+
+        snapshot.forEach((child) => {
+          const driver = {
+            id: child.key,
+            ...child.val()
+          };
+
+          // Fetch current job if exists
+          if (driver.currentJobId) {
+            const promise = new Promise((resolve) => {
+              const jobRef = ref(db, `jobs/${driver.currentJobId}`);
+              onValue(jobRef, (jobSnapshot) => {
+                driver.currentJob = jobSnapshot.val();
+                resolve();
+              }, { onlyOnce: true });
+            });
+            promises.push(promise);
+          }
+
+          driversData.push(driver);
+        });
+
+        Promise.all(promises).then(() => {
+          setDrivers(driversData);
+          setLoading(false);
+        });
+      } catch (err) {
+        console.error('Error processing data:', err);
+        setError('Failed to process driver data');
+        setLoading(false);
+      }
+    }, (error) => {
+      console.error('Error fetching drivers:', error);
+      setError('Failed to load drivers');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+        <Button 
+          variant="contained" 
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h5" fontWeight="bold" gutterBottom>
-        Job Management
+      <Typography variant="h4" fontWeight="bold" gutterBottom>
+        Driver Job Management
+      </Typography>
+      <Typography variant="body1" color="text.secondary" gutterBottom>
+        View and manage driver assignments and job status
       </Typography>
 
-      <Box sx={{ 
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-        gap: 3,
-        mt: 3
-      }}>
-        {driversData.map((driver) => (
-          <DriverCard
-            key={driver.id}
-            driver={driver}
-            onClick={() => setSelectedDriver(driver)}
-          />
-        ))}
-      </Box>
+      {drivers.length === 0 ? (
+        <Paper elevation={0} sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="h6" gutterBottom>
+            No drivers found
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Currently there are no drivers registered in the system
+          </Typography>
+        </Paper>
+      ) : (
+        <Grid container spacing={3}>
+          {drivers.map((driver) => (
+            <Grid item key={driver.id} xs={12} sm={6} md={4} lg={3}>
+              <DriverCard 
+                driver={driver} 
+                onClick={() => setSelectedDriver(driver)} 
+              />
+            </Grid>
+          ))}
+        </Grid>
+      )}
 
       {selectedDriver && (
-        <DriverDetails
-          driver={selectedDriver}
-          onClose={() => setSelectedDriver(null)}
+        <DriverDetails 
+          driver={selectedDriver} 
+          onClose={() => setSelectedDriver(null)} 
         />
       )}
     </Box>

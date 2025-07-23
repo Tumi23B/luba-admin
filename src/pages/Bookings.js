@@ -1,77 +1,147 @@
-import React, { useState } from 'react';
-import { Typography, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper, Button, Box, Chip, Avatar, TextField, InputAdornment, IconButton, Tooltip, Badge, Menu, MenuItem, Divider } from '@mui/material';
-import { Search, FilterList, MoreVert, CheckCircle, PendingActions, LocalShipping, Cancel, Refresh, Add, ArrowDownward, ArrowUpward } from '@mui/icons-material';
+import React, { useState, useEffect } from 'react';
+import { 
+  Typography, Table, TableHead, TableBody, TableRow, TableCell, 
+  TableContainer, Paper, Button, Box, Chip, Avatar, TextField, 
+  InputAdornment, IconButton, Tooltip, Menu, MenuItem, Divider,
+  Dialog, DialogTitle, DialogContent, DialogActions, Grid,
+  CircularProgress
+} from '@mui/material';
+import { 
+  Search, FilterList, MoreVert, CheckCircle, PendingActions, 
+  LocalShipping, Cancel, Refresh, Add, ArrowDownward, ArrowUpward,
+  Person, Email, Phone, LocationOn, DirectionsCar, Payment
+} from '@mui/icons-material';
+import { db } from '../firebase';
+import { ref, onValue, update } from 'firebase/database';
 
-// Static Data Section
-// This section defines the initial array of booking objects.
-const bookings = [
-  { id: 501, customer: 'Charlie Brown', status: 'Pending', date: '2023-05-15', vehicle: 'Toyota Hilux', amount: 'R1,250' },
-  { id: 502, customer: 'Diana Prince', status: 'Completed', date: '2023-05-14', vehicle: 'Ford Ranger', amount: 'R980' },
-  { id: 503, customer: 'Bruce Wayne', status: 'In Transit', date: '2023-05-16', vehicle: 'VW Amarok', amount: 'R1,520' },
-  { id: 504, customer: 'Clark Kent', status: 'Cancelled', date: '2023-05-12', vehicle: 'Isuzu D-Max', amount: 'R1,100' },
-];
-
-// Constants and Mappings Section
-// This section defines color and icon mappings for booking statuses.
+// Status configurations
 const statusColors = {
   Pending: 'warning',
+  'In Progress': 'info',
   Completed: 'success',
-  'In Transit': 'info',
   Cancelled: 'error'
 };
 
 const statusIcons = {
   Pending: <PendingActions />,
+  'In Progress': <LocalShipping />,
   Completed: <CheckCircle />,
-  'In Transit': <LocalShipping />,
   Cancelled: <Cancel />
 };
 
-// This is the main React functional component for the Bookings management page.
 export default function Bookings() {
+  // State management
+  const [bookings, setBookings] = useState([]);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // This section defines all the state variables used in the component.
-  const [anchorEl, setAnchorEl] = useState(null); // State for filter menu anchor
-  const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' }); // State for table sorting
-  const [searchTerm, setSearchTerm] = useState(''); // State for search input
-  const [filterStatus, setFilterStatus] = useState('All'); // State for status filter
+  // Fetch bookings from Firebase
+  useEffect(() => {
+    const bookingsRef = ref(db, 'trips');
+    setIsLoading(true);
+    
+    const unsubscribe = onValue(bookingsRef, (snapshot) => {
+      const bookingsData = [];
+      snapshot.forEach((childSnapshot) => {
+        const booking = childSnapshot.val();
+        bookingsData.push({
+          id: childSnapshot.key,
+          customer: booking.passengerName || 'Not specified',
+          driver: booking.driverName || 'Not assigned',
+          pickup: booking.pickupLocation || 'Location not set',
+          destination: booking.destination || 'Destination not set',
+          date: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : 'Date not available',
+          vehicle: booking.vehicleType || 'Any',
+          amount: booking.fare ? `R${parseFloat(booking.fare).toFixed(2)}` : 'Not specified',
+          status: booking.status || 'Pending',
+          phone: booking.passengerPhone || 'Not provided',
+          email: booking.passengerEmail || 'Not provided',
+          paymentMethod: booking.paymentMethod || 'Not specified',
+          notes: booking.notes || 'No additional notes'
+        });
+      });
+      setBookings(bookingsData);
+      setIsLoading(false);
+    });
 
-  const open = Boolean(anchorEl); // Derived state for filter menu open status
+    return () => unsubscribe();
+  }, []);
 
-  // Event Handlers Section contains functions that handle user interactions and state updates.
-  const handleClick = (event) => setAnchorEl(event.currentTarget); // Handles opening the filter menu.
-  // Handles closing the filter menu.
+  // Handlers
+  const handleClick = (event) => setAnchorEl(event.currentTarget);
   const handleClose = () => setAnchorEl(null);
-  // Handles sorting of the booking table.
+  
   const handleSort = (key) => {
     let direction = 'asc';
-    // If the current sort key is the same, toggle direction; otherwise, set to ascending.
     if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
     setSortConfig({ key, direction });
   };
 
-  // This section contains logic for sorting and filtering the booking data. Sorts the bookings based on the current sort configuration.
+  const handleViewBooking = (booking) => {
+    setSelectedBooking(booking);
+    setOpenDialog(true);
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    if (!selectedBooking) return;
+    setLoading(true);
+    try {
+      await update(ref(db, `trips/${selectedBooking.id}`), { 
+        status: newStatus,
+        updatedAt: new Date().toISOString()
+      });
+      setOpenDialog(false);
+    } catch (error) {
+      console.error("Error updating status:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    setIsLoading(true);
+    // The onValue listener will automatically refresh the data
+    setTimeout(() => setIsLoading(false), 1000);
+  };
+
+  // Sorting and filtering
   const sortedBookings = [...bookings].sort((a, b) => {
     if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
     if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
   });
 
-  // Filters the sorted bookings based on the search term and status filter.
   const filteredBookings = sortedBookings.filter(booking => {
-    // Checks if the booking matches the search term in customer, ID, or vehicle.
     const matchesSearch =
       booking.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.id.toString().includes(searchTerm) ||
-      booking.vehicle.toLowerCase().includes(searchTerm.toLowerCase());
-    // Checks if the booking matches the selected status filter.
+      booking.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.vehicle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.pickup.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.destination.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'All' || booking.status === filterStatus;
-    // Returns true if both search and status filters are matched.
     return matchesSearch && matchesStatus;
   });
 
-  // Render Section
-  // This section defines the JSX structure of the component.
+  if (isLoading) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        bgcolor: '#fefefefe'
+      }}>
+        <CircularProgress sx={{ color: '#c5a34f' }} />
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ bgcolor: '#fefefefe', color: '#c5a34f', minHeight: '100vh', p: 3 }}>
       {/* Header Section */}
@@ -81,29 +151,40 @@ export default function Bookings() {
         </Typography>
 
         <Box sx={{ display: 'flex', gap: 2 }}>
-          {/* New Booking Button */}
-          <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: '#c5a34f', color: '#000', textTransform: 'none', '&:hover': { bgcolor: '#e6c200' } }}>
-            New Booking
-          </Button>
-
-          {/* Refresh Button */}
-          <Tooltip title="Refresh">
-            <IconButton sx={{ color: '#b80000' }}>
+          <Tooltip title="Refresh data">
+            <IconButton sx={{ color: '#b80000' }} onClick={handleRefresh}>
               <Refresh />
             </IconButton>
           </Tooltip>
 
-          {/* Filter Button */}
-          <Button variant="outlined" onClick={handleClick} sx={{ borderColor: '#c5a34f', color: '#000', textTransform: 'none', '&:hover': { borderColor: '#e6c200' } }} startIcon={<FilterList />}>
-            Filter
+          <Button 
+            variant="outlined" 
+            onClick={handleClick} 
+            sx={{ 
+              borderColor: '#c5a34f', 
+              color: '#000', 
+              textTransform: 'none', 
+              '&:hover': { borderColor: '#e6c200' } 
+            }} 
+            startIcon={<FilterList />}
+          >
+            Filter: {filterStatus}
           </Button>
 
-          {/* Filter Menu */}
-          <Menu anchorEl={anchorEl} open={open} onClose={handleClose} PaperProps={{ sx: { bgcolor: '#fefefefe', color: '#b80000' } }}>
+          <Menu 
+            anchorEl={anchorEl} 
+            open={Boolean(anchorEl)} 
+            onClose={handleClose} 
+            PaperProps={{ sx: { bgcolor: '#fefefefe', color: '#b80000' } }}
+          >
             <MenuItem disabled>Filter by Status</MenuItem>
             <Divider sx={{ bgcolor: '#c5a34f' }} />
-            {['All', 'Pending', 'In Transit', 'Completed', 'Cancelled'].map(status => (
-              <MenuItem key={status} onClick={() => { setFilterStatus(status); handleClose(); }}>
+            {['All', 'Pending', 'In Progress', 'Completed', 'Cancelled'].map(status => (
+              <MenuItem 
+                key={status} 
+                onClick={() => { setFilterStatus(status); handleClose(); }}
+                sx={{ color: filterStatus === status ? '#b80000' : 'inherit' }}
+              >
                 {status}
               </MenuItem>
             ))}
@@ -124,9 +205,16 @@ export default function Bookings() {
               <Search sx={{ color: '#c5a34f' }} />
             </InputAdornment>
           ),
-          sx: { color: '#c5a34f', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#c5a34f' } }
+          sx: { 
+            color: '#c5a34f', 
+            '& .MuiOutlinedInput-notchedOutline': { borderColor: '#c5a34f' } 
+          }
         }}
-        sx={{ mb: 3, minWidth: 250, '& .MuiInputBase-input': { color: '#c5a34f' } }}
+        sx={{ 
+          mb: 3, 
+          minWidth: 250, 
+          '& .MuiInputBase-input': { color: '#c5a34f' } 
+        }}
       />
 
       {/* Bookings Table */}
@@ -134,65 +222,236 @@ export default function Bookings() {
         <Table>
           <TableHead>
             <TableRow>
-              {/* Table Headers with Sorting */}
-              {['Booking ID', 'Customer', 'Date', 'Vehicle', 'Amount', 'Status', 'Actions'].map((header, index) => (
-                <TableCell key={header} onClick={() => handleSort(['id', 'customer', 'date', 'vehicle', 'amount', 'status', 'actions'][index])} sx={{ bgcolor: '#c5a34f', fontWeight: 'bold', cursor: 'pointer' }}>
+              {['Booking ID', 'Customer', 'Date', 'Pickup', 'Destination', 'Amount', 'Status', 'Actions'].map((header, index) => (
+                <TableCell 
+                  key={header} 
+                  onClick={() => handleSort(['id', 'customer', 'date', 'pickup', 'destination', 'amount', 'status', 'actions'][index])} 
+                  sx={{ 
+                    bgcolor: '#c5a34f', 
+                    fontWeight: 'bold', 
+                    cursor: 'pointer',
+                    color: '#000'
+                  }}
+                >
                   {header}
-                  {/* Sort icon based on current sort configuration */}
-                  {sortConfig.key === ['id', 'customer', 'date', 'vehicle', 'amount', 'status', 'actions'][index] && (
+                  {sortConfig.key === ['id', 'customer', 'date', 'pickup', 'destination', 'amount', 'status', 'actions'][index] && (
                     sortConfig.direction === 'asc' ?
-                      <ArrowUpward fontSize="small" sx={{ ml: 0.5, color: '#000' }} /> :
-                      <ArrowDownward fontSize="small" sx={{ ml: 0.5, color: '#000' }} />
+                      <ArrowUpward fontSize="small" sx={{ ml: 0.5 }} /> :
+                      <ArrowDownward fontSize="small" sx={{ ml: 0.5 }} />
                   )}
                 </TableCell>
               ))}
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredBookings.map((booking) => (
-              <TableRow key={booking.id} hover>
-                <TableCell sx={{ color: '#b80000' }}>#{booking.id}</TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Avatar sx={{ bgcolor: '#c5a34f', color: '#000' }}>{booking.customer.charAt(0)}</Avatar>
-                    {booking.customer}
-                  </Box>
-                </TableCell>
-                <TableCell sx={{ color: '#928e85' }}>{booking.date}</TableCell>
-                <TableCell sx={{ color: '#928e85' }}>{booking.vehicle}</TableCell>
-                <TableCell sx={{ color: '#c5a34f', fontWeight: 'bold' }}>{booking.amount}</TableCell>
-                <TableCell>
-                  {/* Status Chip with Icon and Color */}
-                  <Chip icon={statusIcons[booking.status]} label={booking.status} color={statusColors[booking.status]} variant="outlined" sx={{ borderColor: '#c5a34f', color: '#c5a34f' }} />
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    {/* Action Buttons based on Booking Status */}
-                    {booking.status === 'Pending' && (
-                      <>
-                        <Button variant="contained" size="small" startIcon={<CheckCircle />} sx={{ bgcolor: '#c5a34f', color: '#000', textTransform: 'none' }}>
-                          Approve
-                        </Button>
-                        <Button variant="outlined" color="error" size="small" startIcon={<Cancel />} sx={{ textTransform: 'none' }}>
-                          Reject
-                        </Button>
-                      </>
-                    )}
-                    {booking.status === 'In Transit' && (
-                      <Button variant="contained" color="success" size="small" startIcon={<CheckCircle />} sx={{ textTransform: 'none' }}>
-                        Mark Complete
-                      </Button>
-                    )}
-                    <IconButton size="small">
-                      <MoreVert sx={{ color: '#c5a34f' }} />
-                    </IconButton>
-                  </Box>
+            {filteredBookings.length > 0 ? (
+              filteredBookings.map((booking) => (
+                <TableRow key={booking.id} hover>
+                  <TableCell sx={{ color: '#b80000' }}>#{booking.id.slice(0, 8)}...</TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Avatar sx={{ bgcolor: '#c5a34f', color: '#000' }}>
+                        {booking.customer.charAt(0)}
+                      </Avatar>
+                      {booking.customer}
+                    </Box>
+                  </TableCell>
+                  <TableCell sx={{ color: '#928e85' }}>{booking.date}</TableCell>
+                  <TableCell sx={{ color: '#928e85' }}>{booking.pickup}</TableCell>
+                  <TableCell sx={{ color: '#928e85' }}>{booking.destination}</TableCell>
+                  <TableCell sx={{ color: '#c5a34f', fontWeight: 'bold' }}>{booking.amount}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      icon={statusIcons[booking.status]} 
+                      label={booking.status} 
+                      color={statusColors[booking.status]} 
+                      variant="outlined" 
+                      sx={{ 
+                        borderColor: '#c5a34f', 
+                        color: '#c5a34f',
+                        minWidth: 120
+                      }} 
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Tooltip title="View Details">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleViewBooking(booking)}
+                          sx={{ color: '#c5a34f' }}
+                        >
+                          <MoreVert />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#AAAAAA' }}>
+                  {bookings.length === 0 ? 'No bookings found in database' : 'No bookings match your filters'}
                 </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Booking Details Dialog */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#b00000', color: '#fefefefe' }}>
+          <Box display="flex" alignItems="center">
+            <DirectionsCar sx={{ mr: 1 }} /> Booking Details: #{selectedBooking?.id}
+          </Box>
+        </DialogTitle>
+        {selectedBooking && (
+          <>
+            <DialogContent dividers sx={{ p: 3, bgcolor: '#fefefefe', color: '#b00000' }}>
+              <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, color: '#b00000' }}>
+                Trip Information
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <Person sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Passenger:</strong> {selectedBooking.customer}
+                    </Box>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <Phone sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Phone:</strong> {selectedBooking.phone}
+                    </Box>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <Email sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Email:</strong> {selectedBooking.email}
+                    </Box>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <Person sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Driver:</strong> {selectedBooking.driver}
+                    </Box>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <LocationOn sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Pickup:</strong> {selectedBooking.pickup}
+                    </Box>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <LocationOn sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Destination:</strong> {selectedBooking.destination}
+                    </Box>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <DirectionsCar sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Vehicle Type:</strong> {selectedBooking.vehicle}
+                    </Box>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <Payment sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Payment Method:</strong> {selectedBooking.paymentMethod}
+                    </Box>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography><strong>Date Created:</strong> {selectedBooking.date}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography><strong>Amount:</strong> {selectedBooking.amount}</Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <strong>Status:</strong> 
+                      <Chip
+                        label={selectedBooking.status}
+                        size="small"
+                        sx={{ ml: 1 }}
+                        color={statusColors[selectedBooking.status]}
+                        icon={statusIcons[selectedBooking.status]}
+                      />
+                    </Box>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography><strong>Notes:</strong> {selectedBooking.notes}</Typography>
+                </Grid>
+              </Grid>
+            </DialogContent>
+            <DialogActions sx={{ p: 2 }}>
+              {selectedBooking.status === 'Pending' && (
+                <>
+                  <Button
+                    variant="contained"
+                    sx={{
+                      bgcolor: '#c5a34f',
+                      color: '#000',
+                      '&:hover': { bgcolor: '#e6c200' }
+                    }}
+                    onClick={() => handleStatusChange('In Progress')}
+                    disabled={loading}
+                    startIcon={<CheckCircle />}
+                  >
+                    Approve Trip
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() => handleStatusChange('Cancelled')}
+                    disabled={loading}
+                    startIcon={<Cancel />}
+                  >
+                    Reject Trip
+                  </Button>
+                </>
+              )}
+              {selectedBooking.status === 'In Progress' && (
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => handleStatusChange('Completed')}
+                  disabled={loading}
+                  startIcon={<CheckCircle />}
+                >
+                  Mark as Completed
+                </Button>
+              )}
+              <Button 
+                variant="outlined" 
+                onClick={() => setOpenDialog(false)}
+                sx={{ color: '#b00000', borderColor: '#b00000' }}
+              >
+                Close
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 }
