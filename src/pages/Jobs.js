@@ -43,6 +43,9 @@ import {
 import { db } from '../firebase';
 import { ref, onValue, query, orderByChild, equalTo, limitToLast } from 'firebase/database';
 
+
+
+
 // Configuration for driver status display (icons, colors, labels)
 const statusConfig = {
   verified: { icon: <VerifiedIcon />, color: 'success', label: 'Verified' },
@@ -489,6 +492,8 @@ const DriverManagement = () => {
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showActiveVehicles, setShowActiveVehicles] = useState(true);
+
 
   // Fetch drivers data from Firebase when component mounts
   useEffect(() => {
@@ -568,44 +573,67 @@ const DriverManagement = () => {
   // Main render
   return (
     <Box sx={{ p: 3 }}>
+  {/* Header with Clear button */}
+  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Box>
       <Typography variant="h4" fontWeight="bold" gutterBottom>
         Driver Job Management
       </Typography>
-      <Typography variant="body1" color="text.secondary" gutterBottom>
+      <Typography variant="body1" color="text.secondary">
         View and manage driver assignments and job status
       </Typography>
-
-      {/* Display drivers list or empty state */}
-      {drivers.length === 0 ? (
-        <Paper elevation={0} sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="h6" gutterBottom>
-            No drivers found
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Currently there are no drivers registered in the system
-          </Typography>
-        </Paper>
-      ) : (
-        <Grid container spacing={3}>
-          {drivers.map((driver) => (
-            <Grid item key={driver.id} xs={12} sm={6} md={4} lg={3}>
-              <DriverCard 
-                driver={driver} 
-                onClick={() => setSelectedDriver(driver)} 
-              />
-            </Grid>
-          ))}
-        </Grid>
-      )}
-
-      {/* Driver details dialog when a driver is selected */}
-      {selectedDriver && (
-        <DriverDetails 
-          driver={selectedDriver} 
-          onClose={() => setSelectedDriver(null)} 
-        />
-      )}
     </Box>
+    <Button
+      variant="outlined"
+      color="error"
+      onClick={() => setShowActiveVehicles(false)}
+      sx={{ height: 'fit-content' }}
+    >
+      Clear Active Vehicles
+    </Button>
+  </Box>
+
+  {/* Display drivers list or empty state */}
+  {drivers.length === 0 ? (
+  <Paper elevation={0} sx={{ p: 4, textAlign: 'center' }}>
+    <Typography variant="h6" gutterBottom>
+      No drivers found
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      Currently there are no drivers registered in the system
+    </Typography>
+  </Paper>
+) : !showActiveVehicles ? (
+  <Paper elevation={0} sx={{ p: 4, textAlign: 'center' }}>
+    <Typography variant="body2" color="text.secondary" gutterBottom>
+      Active vehicles view cleared
+    </Typography>
+    <Button variant="contained" onClick={() => setShowActiveVehicles(true)}>
+      Restore View
+    </Button>
+  </Paper>
+) : (
+  <Grid container spacing={3}>
+    {drivers.map((driver) => (
+      <Grid item key={driver.id} xs={12} sm={6} md={4} lg={3}>
+        <DriverCard 
+          driver={driver} 
+          onClick={() => setSelectedDriver(driver)} 
+        />
+      </Grid>
+    ))}
+  </Grid>
+)}
+
+  {/* Driver details dialog when a driver is selected */}
+  {selectedDriver && (
+    <DriverDetails 
+      driver={selectedDriver} 
+      onClose={() => setSelectedDriver(null)} 
+    />
+  )}
+</Box>
+
   );
 };
 
