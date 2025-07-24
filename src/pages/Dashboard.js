@@ -20,6 +20,8 @@ export default function Dashboard() {
   const [pendingDrivers, setPendingDrivers] = useState([]); // State for pending drivers
   const [activeJobs, setActiveJobs] = useState([]); // State for active jobs (assuming they come from Firebase eventually)
   const navigate = useNavigate(); // Initialize navigate hook
+  const [showAcceptMessage, setShowAcceptMessage] = useState(false);
+
 
   useEffect(() => {
     // Fetch pending drivers from Firebase

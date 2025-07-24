@@ -9,7 +9,7 @@ import {
   Add, ArrowDownward, ArrowUpward, Email, Phone, Person, Description, DirectionsCar as DirectionsCarIcon
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { ref, onValue, update, push } from 'firebase/database';
 
 /**
@@ -49,20 +49,26 @@ export default function Drivers() {
     registration: '',
     status: 'Approved'
   });
+  const [showClearDialog, setShowClearDialog] = useState(false);
+
 
   // Fetch drivers data from Firebase
   useEffect(() => {
-    // If driverId is in URL, fetch that specific driver
-    if (driverId) {
-      const driverRef = ref(db, `driverApplications/${driverId}`);
-      onValue(driverRef, (snapshot) => {
-        const data = snapshot.val();
+  // If driverId is in URL, fetch that specific driver
+  if (driverId) {
+    const driverRef = ref(db, `driverApplications/${driverId}`);
+    onValue(driverRef, (snapshot) => {
+      const data = snapshot.val();
+      const userRef = ref(db, `users/${driverId}`);
+      onValue(userRef, (userSnap) => {
+        const userInfo = userSnap.val() || {};
+
         if (data) {
           setSelectedDriver({
             id: driverId,
             name: data.fullName || 'N/A',
-            email: data.email || 'N/A',
-            phone: data.phoneNumber || 'N/A',
+            email: userInfo.email || 'N/A',          // Now from users node
+            phone: userInfo.phoneNumber || 'N/A',     // Now from users node
             status: data.status || 'Pending',
             idNumber: data.idNumber || 'N/A',
             address: data.address || 'N/A',
@@ -71,22 +77,30 @@ export default function Drivers() {
             joinDate: data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'N/A',
             images: data.images || {}
           });
-          setOpenDialog(true); // Automatically open dialog for this driver
+          setOpenDialog(true);
         }
       });
-    }
+    });
+  }
 
-    // Fetch all driver applications
-    const driversRef = ref(db, 'driverApplications');
-    onValue(driversRef, (snapshot) => {
-      const driversData = [];
-      snapshot.forEach((childSnapshot) => {
-        const driver = childSnapshot.val();
+  // Fetch all driver applications
+  const driversRef = ref(db, 'driverApplications');
+  onValue(driversRef, (snapshot) => {
+    const driversData = [];
+
+    snapshot.forEach((childSnapshot) => {
+      const driverId = childSnapshot.key;
+      const driver = childSnapshot.val();
+
+      const userRef = ref(db, `users/${driverId}`);
+      onValue(userRef, (userSnap) => {
+        const userInfo = userSnap.val() || {};
+
         driversData.push({
-          id: childSnapshot.key,
+          id: driverId,
           name: driver.fullName || 'N/A',
-          email: driver.email || 'N/A',
-          phone: driver.phoneNumber || 'N/A',
+          email: userInfo.email || 'N/A',           // Now from users node
+          phone: userInfo.phoneNumber || 'N/A',     // Now from users node
           status: driver.status || 'Pending',
           idNumber: driver.idNumber || 'N/A',
           address: driver.address || 'N/A',
@@ -95,10 +109,13 @@ export default function Drivers() {
           joinDate: driver.createdAt ? new Date(driver.createdAt).toLocaleDateString() : 'N/A',
           images: driver.images || {}
         });
+
+        // Refresh list after each entry
+        setDrivers([...driversData]);
       });
-      setDrivers(driversData); // Update drivers state
     });
-  }, [driverId]); // Re-run when driverId changes
+  });
+}, [driverId]);
 
   // Dialog handlers
   const handleOpenDialog = (driver) => {
@@ -190,6 +207,21 @@ export default function Drivers() {
       [name]: value
     }));
   };
+
+  // Clear all drivers handler
+  const handleClearAllDrivers = async () => {
+  setLoadingAction(true);
+  try {
+    await update(ref(db), { driverApplications: null }); // Clear entire node
+    setDrivers([]); // Clear UI table
+    setShowClearDialog(false);
+  } catch (error) {
+    console.error('Error clearing driverApplications:', error);
+  } finally {
+    setLoadingAction(false);
+  }
+};
+
 
   /**
    * Save new driver to database
@@ -342,6 +374,19 @@ export default function Drivers() {
           >
             Add Driver
           </Button>
+          <Button
+              variant="outlined"
+              color="error"
+              onClick={() => setShowClearDialog(true)}
+              sx={{
+                ml: 2,
+                borderColor: '#b00000',
+                color: '#b00000',
+                '&:hover': { bgcolor: '#b00000', color: '#fff' }
+              }}
+            >
+              Clear Table
+            </Button>
         </Box>
       </Box>
 
@@ -387,18 +432,21 @@ export default function Drivers() {
               filteredDrivers.map((driver) => (
                 <TableRow key={driver.id} hover>
                   <TableCell sx={{ color: '#b00000' }}>{driver.name}</TableCell>
+
                   <TableCell sx={{ color: '#b00000' }}>
                     <Box display="flex" alignItems="center">
                       <Email sx={{ mr: 1, fontSize: '1rem', color: '#c5a34f' }} />
-                      {driver.email}
+                      {driver.email !== 'N/A' ? driver.email : <em style={{ color: '#888' }}>Not provided</em>}
                     </Box>
                   </TableCell>
+
                   <TableCell sx={{ color: '#b00000' }}>
                     <Box display="flex" alignItems="center">
                       <Phone sx={{ mr: 1, fontSize: '1rem', color: '#c5a34f' }} />
-                      {driver.phone}
+                      {driver.phone !== 'N/A' ? driver.phone : <em style={{ color: '#888' }}>Not provided</em>}
                     </Box>
                   </TableCell>
+
                   <TableCell sx={{ color: '#b00000' }}>{driver.idNumber}</TableCell>
                   <TableCell sx={{ color: '#b00000' }}>{driver.address}</TableCell>
                   <TableCell>
@@ -567,22 +615,25 @@ export default function Drivers() {
                 <Grid item xs={12} sm={6}>
                   <Typography><strong>Full Name:</strong> {selectedDriver.name}</Typography>
                 </Grid>
+
                 <Grid item xs={12} sm={6}>
                   <Typography>
                     <Box display="flex" alignItems="center">
                       <Email sx={{ mr: 1, color: '#c5a34f' }} />
-                      <strong>Email:</strong> {selectedDriver.email}
+                      <strong>Email:</strong> {selectedDriver.email !== 'N/A' ? selectedDriver.email : <em style={{ color: '#888' }}>Not provided</em>}
                     </Box>
                   </Typography>
                 </Grid>
+
                 <Grid item xs={12} sm={6}>
                   <Typography>
                     <Box display="flex" alignItems="center">
                       <Phone sx={{ mr: 1, color: '#c5a34f' }} />
-                      <strong>Phone:</strong> {selectedDriver.phone}
+                      <strong>Phone:</strong> {selectedDriver.phone !== 'N/A' ? selectedDriver.phone : <em style={{ color: '#888' }}>Not provided</em>}
                     </Box>
                   </Typography>
                 </Grid>
+
                 <Grid item xs={12} sm={6}>
                   <Typography>
                     <Box display="flex" alignItems="center">
@@ -758,6 +809,28 @@ export default function Drivers() {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Clear Table Confirmation Dialog */}
+        <Dialog open={showClearDialog} onClose={() => setShowClearDialog(false)}>
+          <DialogTitle sx={{ bgcolor: '#b00000', color: '#fff' }}>
+            Confirm Clear Table
+          </DialogTitle>
+          <DialogContent sx={{ color: '#c5a34f' }}>
+            Are you sure you want to permanently delete <strong>all driver applications</strong> from the database?
+            This will also clear the entire table view. This action cannot be undone.
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowClearDialog(false)}>Cancel</Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleClearAllDrivers}
+              disabled={loadingAction}
+            >
+              {loadingAction ? 'Clearing...' : 'Confirm Clear'}
+            </Button>
+          </DialogActions>
+        </Dialog>
     </Box>
   );
 }
