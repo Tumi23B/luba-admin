@@ -25,6 +25,8 @@ export default function Drivers() {
   // Router hooks for navigation and params
   const { driverId } = useParams(); // Get driver ID from URL if present
   const navigate = useNavigate(); // Navigation function
+  console.log('Navigating to Dashboard...');
+
 
   // State management
   const [drivers, setDrivers] = useState([]); // List of all drivers
@@ -67,8 +69,8 @@ export default function Drivers() {
           setSelectedDriver({
             id: driverId,
             name: data.fullName || 'N/A',
-            email: userInfo.email || 'N/A',          // Now from users node
-            phone: userInfo.phoneNumber || 'N/A',     // Now from users node
+            email: userInfo.email || data.email || 'N/A',
+            phone: userInfo.phoneNumber || data.phoneNumber || 'N/A',
             status: data.status || 'Pending',
             idNumber: data.idNumber || 'N/A',
             address: data.address || 'N/A',
@@ -99,8 +101,8 @@ export default function Drivers() {
         driversData.push({
           id: driverId,
           name: driver.fullName || 'N/A',
-          email: userInfo.email || 'N/A',           // Now from users node
-          phone: userInfo.phoneNumber || 'N/A',     // Now from users node
+          email: userInfo.email || driver.email || 'N/A',
+          phone: userInfo.phoneNumber || driver.phoneNumber || 'N/A',
           status: driver.status || 'Pending',
           idNumber: driver.idNumber || 'N/A',
           address: driver.address || 'N/A',
@@ -123,10 +125,9 @@ export default function Drivers() {
     setOpenDialog(true);
   };
 
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    if (driverId) navigate('/dashboard'); // If came from direct link, navigate back
-  };
+ const handleCloseDialog = () => {
+  setOpenDialog(false); // Just close the dialog, stay on the same screen
+};
 
   /**
    * Approve a driver application
@@ -134,49 +135,46 @@ export default function Drivers() {
    * - Creates entry in approved drivers collection
    */
   const handleApprove = async () => {
-    if (!selectedDriver) return;
-    setLoadingAction(true);
-    try {
-      // Update application status
-      await update(ref(db, `driverApplications/${selectedDriver.id}`), { 
-        status: 'Approved' 
-      });
-      
-      // Add to approved drivers
-      await update(ref(db, `drivers/${selectedDriver.id}`), {
-        fullName: selectedDriver.name,
-        email: selectedDriver.email,
-        phoneNumber: selectedDriver.phone,
-        idNumber: selectedDriver.idNumber,
-        address: selectedDriver.address,
-        status: 'Approved',
-        vehicleType: selectedDriver.vehicle,
-        registration: selectedDriver.registration,
-        createdAt: new Date().toISOString()
-      });
-      
-      handleCloseDialog();
-    } finally {
-      setLoadingAction(false);
-    }
-  };
+  if (!selectedDriver) return;
+  setLoadingAction(true);
+  try {
+    await update(ref(db, `driverApplications/${selectedDriver.id}`), { status: 'Approved' });
+    await update(ref(db, `drivers/${selectedDriver.id}`), {
+      fullName: selectedDriver.name,
+      email: selectedDriver.email,
+      phoneNumber: selectedDriver.phone,
+      idNumber: selectedDriver.idNumber,
+      address: selectedDriver.address,
+      status: 'Approved',
+      vehicleType: selectedDriver.vehicle,
+      registration: selectedDriver.registration,
+      createdAt: new Date().toISOString()
+    });
+
+    alert('Application approved!');
+    navigate('/dashboard');
+  } finally {
+    setLoadingAction(false);
+  }
+};
 
   /**
    * Reject a driver application
    * - Updates status in driverApplications
    */
   const handleReject = async () => {
-    if (!selectedDriver) return;
-    setLoadingAction(true);
-    try {
-      await update(ref(db, `driverApplications/${selectedDriver.id}`), { 
-        status: 'Rejected' 
-      });
-      handleCloseDialog();
-    } finally {
-      setLoadingAction(false);
-    }
-  };
+  if (!selectedDriver) return;
+  setLoadingAction(true);
+  try {
+    await update(ref(db, `driverApplications/${selectedDriver.id}`), { status: 'Rejected' });
+
+    alert('Application rejected!');
+    navigate('/dashboard');
+  } finally {
+    setLoadingAction(false);
+  }
+};
+
 
   // Search and filter handlers
   const handleSearchChange = (event) => setSearchTerm(event.target.value);
