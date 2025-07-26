@@ -321,10 +321,10 @@ export default function Rides() {
                   key={header} 
                   onClick={() => handleSort(['id', 'customerId', 'pickup', 'dropoff', 'status', 'actions'][index])} 
                   sx={{ 
-                    bgcolor: '#c5a34f', 
+                    bgcolor: '#000000', 
                     fontWeight: 'bold', 
                     cursor: 'pointer',
-                    color: '#000'
+                    color: '#c5a34f'
                   }}
                 >
                   {header}
