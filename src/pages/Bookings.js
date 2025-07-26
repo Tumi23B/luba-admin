@@ -342,9 +342,9 @@ export default function Rides() {
               filteredRides.map((ride) => (
                 <TableRow key={ride.id} hover>
                   <TableCell sx={{ color: darkRed }}>#{ride.id.slice(0, 8)}...</TableCell>
-                  <TableCell sx={{ color: '#928e85' }}>{ride.customerId}</TableCell>
-                  <TableCell sx={{ color: '#928e85' }}>{ride.pickup}</TableCell>
-                  <TableCell sx={{ color: '#928e85' }}>{ride.dropoff}</TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>{ride.customerId}</TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>{ride.pickup}</TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>{ride.dropoff}</TableCell>
                   <TableCell>
                     <Chip 
                       icon={statusIcons[ride.status]} 
@@ -353,7 +353,7 @@ export default function Rides() {
                       variant="outlined" 
                       sx={{ 
                         borderColor: '#c5a34f', 
-                        color: '#c5a34f',
+                        color: '#b00000',
                         minWidth: 120
                       }} 
                     />
