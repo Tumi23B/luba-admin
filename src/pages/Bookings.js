@@ -1,140 +1,204 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Typography, Table, TableHead, TableBody, TableRow, TableCell, 
-  TableContainer, Paper, Button, Box, Chip, Avatar, TextField, 
+  TableContainer, Paper, Button, Box, Chip, TextField, 
   InputAdornment, IconButton, Tooltip, Menu, MenuItem, Divider,
   Dialog, DialogTitle, DialogContent, DialogActions, Grid,
-  CircularProgress
+  CircularProgress, Snackbar, Alert
 } from '@mui/material';
 import { 
   Search, FilterList, MoreVert, CheckCircle, PendingActions, 
-  LocalShipping, Cancel, Refresh, Add, ArrowDownward, ArrowUpward,
-  Person, Email, Phone, LocationOn, DirectionsCar, Payment
+  Cancel, Refresh, DirectionsCar, GpsFixed,
+  LocationOn, Person, AccessTime, Directions, ArrowUpward, ArrowDownward
 } from '@mui/icons-material';
 import { db } from '../firebase';
 import { ref, onValue, update } from 'firebase/database';
 
-// Status configurations - defines colors and icons for different booking statuses
+// Status configurations
 const statusColors = {
-  Pending: 'warning',
-  'In Progress': 'info',
-  Completed: 'success',
-  Cancelled: 'error'
+  pending: 'warning',
+  accepted: 'primary',
+  'on_the_way': 'secondary',
+  arrived: 'info',
+  completed: 'success',
+  cancelled: 'error'
 };
 
 const statusIcons = {
-  Pending: <PendingActions />,
-  'In Progress': <LocalShipping />,
-  Completed: <CheckCircle />,
-  Cancelled: <Cancel />
+  pending: <PendingActions />,
+  accepted: <CheckCircle color="primary" />,
+  on_the_way: <DirectionsCar />,
+  arrived: <LocationOn />,
+  completed: <CheckCircle />,
+  cancelled: <Cancel />
 };
 
-export default function Bookings() {
-  // State management for the component
-  const [bookings, setBookings] = useState([]); // Stores all bookings data
-  const [selectedBooking, setSelectedBooking] = useState(null); // Currently selected booking for details view
-  const [openDialog, setOpenDialog] = useState(false); // Controls visibility of details dialog
-  const [anchorEl, setAnchorEl] = useState(null); // Anchor for filter menu
-  const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' }); // Current sort configuration
-  const [searchTerm, setSearchTerm] = useState(''); // Search term for filtering
-  const [filterStatus, setFilterStatus] = useState('All'); // Current status filter
-  const [loading, setLoading] = useState(false); // Loading state for status changes
-  const [isLoading, setIsLoading] = useState(true); // Initial data loading state
+// Dark red color
+const darkRed = '#8B0000';
 
-  // Fetch bookings from Firebase on component mount
+export default function Rides() {
+  // State management
+  const [rides, setRides] = useState([]);
+  const [selectedRide, setSelectedRide] = useState(null);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+
+  // Fetch rides from Firebase
   useEffect(() => {
-    const bookingsRef = ref(db, 'trips');
-    setIsLoading(true);
-    
-    // Set up real-time listener for bookings data
-    const unsubscribe = onValue(bookingsRef, (snapshot) => {
-      const bookingsData = [];
-      snapshot.forEach((childSnapshot) => {
-        const booking = childSnapshot.val();
-        // Format booking data for display
-        bookingsData.push({
-          id: childSnapshot.key,
-          customer: booking.passengerName || 'Not specified',
-          driver: booking.driverName || 'Not assigned',
-          pickup: booking.pickupLocation || 'Location not set',
-          destination: booking.destination || 'Destination not set',
-          date: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : 'Date not available',
-          vehicle: booking.vehicleType || 'Any',
-          amount: booking.fare ? `R${parseFloat(booking.fare).toFixed(2)}` : 'Not specified',
-          status: booking.status || 'Pending',
-          phone: booking.passengerPhone || 'Not provided',
-          email: booking.passengerEmail || 'Not provided',
-          paymentMethod: booking.paymentMethod || 'Not specified',
-          notes: booking.notes || 'No additional notes'
-        });
-      });
-      setBookings(bookingsData);
-      setIsLoading(false);
-    });
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const ridesRef = ref(db, 'rides');
+        
+        const unsubscribe = onValue(ridesRef, (snapshot) => {
+          const ridesData = [];
+          
+          snapshot.forEach((childSnapshot) => {
+            const ride = childSnapshot.val();
+            
+            if (ride) {
+              ridesData.push({
+                id: childSnapshot.key,
+                customerId: ride.customerId || 'Not specified',
+                dropoff: ride.dropoff || 'Not specified',
+                pickup: ride.pickup || 'Not specified',
+                pickupCoords: ride.pickupCoords || null,
+                status: ride.status || 'pending',
+                timestamp: ride.timestamp ? new Date(ride.timestamp).toLocaleString() : 'Date not available',
+                dropoffCoords: ride.dropoffCoords || null
+              });
+            }
+          });
 
-    // Clean up listener on component unmount
-    return () => unsubscribe();
+          setRides(ridesData);
+          setIsLoading(false);
+        }, (error) => {
+          console.error("Error fetching rides:", error);
+          setError("Failed to load rides. Please refresh.");
+          setSnackbarOpen(true);
+          setIsLoading(false);
+        });
+
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Initialization error:", error);
+        setError("Failed to initialize. Please refresh.");
+        setSnackbarOpen(true);
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
+
+  // Track ride on Google Maps
+  const trackRide = (ride) => {
+    if (ride.pickupCoords && ride.dropoffCoords) {
+      const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${ride.pickupCoords.latitude},${ride.pickupCoords.longitude}&destination=${ride.dropoffCoords.latitude},${ride.dropoffCoords.longitude}&travelmode=driving`;
+      window.open(mapsUrl, '_blank');
+    } else {
+      setError("Location coordinates not available for tracking");
+      setSnackbarOpen(true);
+    }
+  };
 
   // Menu handlers
   const handleClick = (event) => setAnchorEl(event.currentTarget);
   const handleClose = () => setAnchorEl(null);
   
-  // Sorting handler - toggles between ascending and descending
+  // Sorting handler
   const handleSort = (key) => {
     let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
     setSortConfig({ key, direction });
   };
 
-  // Opens dialog with booking details
-  const handleViewBooking = (booking) => {
-    setSelectedBooking(booking);
+  // View ride details
+  const handleViewRide = (ride) => {
+    setSelectedRide(ride);
     setOpenDialog(true);
   };
 
-  // Updates booking status in Firebase
+  // Update ride status
   const handleStatusChange = async (newStatus) => {
-    if (!selectedBooking) return;
+    if (!selectedRide) return;
+    
     setLoading(true);
     try {
-      await update(ref(db, `trips/${selectedBooking.id}`), { 
+      await update(ref(db, `rides/${selectedRide.id}`), { 
         status: newStatus,
-        updatedAt: new Date().toISOString() // Track when status was changed
+        updatedAt: new Date().toISOString()
       });
+      
+      setRides(prevRides => 
+        prevRides.map(ride => 
+          ride.id === selectedRide.id 
+            ? { ...ride, status: newStatus } 
+            : ride
+        )
+      );
+      
       setOpenDialog(false);
+      setSnackbarOpen(true);
     } catch (error) {
       console.error("Error updating status:", error);
+      setError("Failed to update status. Please try again.");
+      setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
   };
 
-  // Simulates data refresh
+  // Refresh data
   const handleRefresh = () => {
     setIsLoading(true);
-    // The onValue listener will automatically refresh the data
-    setTimeout(() => setIsLoading(false), 1000);
+    setRides([]);
   };
 
-  // Apply sorting to bookings
-  const sortedBookings = [...bookings].sort((a, b) => {
-    if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
-  });
+  // Apply sorting to rides
+  const sortedRides = useMemo(() => {
+    const sortableRides = [...rides];
+    return sortableRides.sort((a, b) => {
+      const aValue = a[sortConfig.key] || '';
+      const bValue = b[sortConfig.key] || '';
+      
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [rides, sortConfig]);
 
-  // Apply search and status filters to sorted bookings
-  const filteredBookings = sortedBookings.filter(booking => {
-    const matchesSearch =
-      booking.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.vehicle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.pickup.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.destination.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'All' || booking.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
+  // Apply filters
+  const filteredRides = useMemo(() => {
+    const searchTermLower = searchTerm.toLowerCase();
+    
+    return sortedRides.filter(ride => {
+      const id = ride.id || '';
+      const pickup = ride.pickup || '';
+      const dropoff = ride.dropoff || '';
+      const status = ride.status || '';
+      
+      const matchesSearch = 
+        id.toLowerCase().includes(searchTermLower) ||
+        pickup.toLowerCase().includes(searchTermLower) ||
+        dropoff.toLowerCase().includes(searchTermLower);
+      
+      const matchesStatus = filterStatus === 'All' || status === filterStatus;
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [sortedRides, searchTerm, filterStatus]);
 
   // Loading state UI
   if (isLoading) {
@@ -151,24 +215,39 @@ export default function Bookings() {
     );
   }
 
-  // Main component render
   return (
     <Box sx={{ bgcolor: '#fefefefe', color: '#c5a34f', minHeight: '100vh', p: 3 }}>
+      {/* Error Snackbar */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setSnackbarOpen(false)} 
+          severity={error ? 'error' : 'success'}
+          sx={{ width: '100%' }}
+        >
+          {error || 'Operation successful'}
+        </Alert>
+      </Snackbar>
+
       {/* Header Section */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', textShadow: '0 0 8px rgba(255, 215, 0, 0.3)' }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: darkRed }}>
           Bookings Management
         </Typography>
 
         {/* Action buttons */}
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Tooltip title="Refresh data">
-            <IconButton sx={{ color: '#b80000' }} onClick={handleRefresh}>
+            <IconButton sx={{ color: darkRed }} onClick={handleRefresh}>
               <Refresh />
             </IconButton>
           </Tooltip>
 
-          {/* Status filter dropdown */}
+          {/* Status filter dropdown 
           <Button 
             variant="outlined" 
             onClick={handleClick} 
@@ -182,22 +261,25 @@ export default function Bookings() {
           >
             Filter: {filterStatus}
           </Button>
-
+*/}
           <Menu 
             anchorEl={anchorEl} 
             open={Boolean(anchorEl)} 
             onClose={handleClose} 
-            PaperProps={{ sx: { bgcolor: '#fefefefe', color: '#b80000' } }}
+            PaperProps={{ sx: { bgcolor: '#fefefefe', color: darkRed } }}
           >
             <MenuItem disabled>Filter by Status</MenuItem>
             <Divider sx={{ bgcolor: '#c5a34f' }} />
-            {['All', 'Pending', 'In Progress', 'Completed', 'Cancelled'].map(status => (
+            {['All', 'pending', 'accepted', 'on_the_way', 'arrived', 'completed', 'cancelled'].map(status => (
               <MenuItem 
                 key={status} 
-                onClick={() => { setFilterStatus(status); handleClose(); }}
-                sx={{ color: filterStatus === status ? '#b80000' : 'inherit' }}
+                onClick={() => { 
+                  setFilterStatus(status); 
+                  handleClose(); 
+                }}
+                sx={{ color: filterStatus === status ? darkRed : 'inherit' }}
               >
-                {status}
+                {status.replace(/_/g, ' ')}
               </MenuItem>
             ))}
           </Menu>
@@ -207,7 +289,7 @@ export default function Bookings() {
       {/* Search input */}
       <TextField
         variant="outlined"
-        placeholder="Search bookings..."
+        placeholder="Search rides..."
         size="small"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
@@ -229,16 +311,15 @@ export default function Bookings() {
         }}
       />
 
-      {/* Bookings Table */}
+      {/* Rides Table */}
       <TableContainer component={Paper} sx={{ bgcolor: '#fefefefe', border: '1px solid #c5a34f' }}>
         <Table>
           <TableHead>
             <TableRow>
-              {/* Table headers with sorting functionality */}
-              {['Booking ID', 'Customer', 'Date', 'Pickup', 'Destination', 'Amount', 'Status', 'Actions'].map((header, index) => (
+              {['Ride ID', 'Customer ID', 'Pickup', 'Dropoff', 'Status', 'Actions'].map((header, index) => (
                 <TableCell 
                   key={header} 
-                  onClick={() => handleSort(['id', 'customer', 'date', 'pickup', 'destination', 'amount', 'status', 'actions'][index])} 
+                  onClick={() => handleSort(['id', 'customerId', 'pickup', 'dropoff', 'status', 'actions'][index])} 
                   sx={{ 
                     bgcolor: '#c5a34f', 
                     fontWeight: 'bold', 
@@ -247,7 +328,7 @@ export default function Bookings() {
                   }}
                 >
                   {header}
-                  {sortConfig.key === ['id', 'customer', 'date', 'pickup', 'destination', 'amount', 'status', 'actions'][index] && (
+                  {sortConfig.key === ['id', 'customerId', 'pickup', 'dropoff', 'status', 'actions'][index] && (
                     sortConfig.direction === 'asc' ?
                       <ArrowUpward fontSize="small" sx={{ ml: 0.5 }} /> :
                       <ArrowDownward fontSize="small" sx={{ ml: 0.5 }} />
@@ -257,28 +338,18 @@ export default function Bookings() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {/* Table rows with booking data */}
-            {filteredBookings.length > 0 ? (
-              filteredBookings.map((booking) => (
-                <TableRow key={booking.id} hover>
-                  <TableCell sx={{ color: '#b80000' }}>#{booking.id.slice(0, 8)}...</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Avatar sx={{ bgcolor: '#c5a34f', color: '#000' }}>
-                        {booking.customer.charAt(0)}
-                      </Avatar>
-                      {booking.customer}
-                    </Box>
-                  </TableCell>
-                  <TableCell sx={{ color: '#928e85' }}>{booking.date}</TableCell>
-                  <TableCell sx={{ color: '#928e85' }}>{booking.pickup}</TableCell>
-                  <TableCell sx={{ color: '#928e85' }}>{booking.destination}</TableCell>
-                  <TableCell sx={{ color: '#c5a34f', fontWeight: 'bold' }}>{booking.amount}</TableCell>
+            {filteredRides.length > 0 ? (
+              filteredRides.map((ride) => (
+                <TableRow key={ride.id} hover>
+                  <TableCell sx={{ color: darkRed }}>#{ride.id.slice(0, 8)}...</TableCell>
+                  <TableCell sx={{ color: '#928e85' }}>{ride.customerId}</TableCell>
+                  <TableCell sx={{ color: '#928e85' }}>{ride.pickup}</TableCell>
+                  <TableCell sx={{ color: '#928e85' }}>{ride.dropoff}</TableCell>
                   <TableCell>
                     <Chip 
-                      icon={statusIcons[booking.status]} 
-                      label={booking.status} 
-                      color={statusColors[booking.status]} 
+                      icon={statusIcons[ride.status]} 
+                      label={ride.status.replace(/_/g, ' ')} 
+                      color={statusColors[ride.status]} 
                       variant="outlined" 
                       sx={{ 
                         borderColor: '#c5a34f', 
@@ -292,10 +363,20 @@ export default function Bookings() {
                       <Tooltip title="View Details">
                         <IconButton 
                           size="small" 
-                          onClick={() => handleViewBooking(booking)}
+                          onClick={() => handleViewRide(ride)}
                           sx={{ color: '#c5a34f' }}
                         >
                           <MoreVert />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Track Ride">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => trackRide(ride)}
+                          sx={{ color: '#1976d2' }}
+                          disabled={!ride.pickupCoords || !ride.dropoffCoords}
+                        >
+                          <GpsFixed />
                         </IconButton>
                       </Tooltip>
                     </Box>
@@ -304,8 +385,8 @@ export default function Bookings() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#AAAAAA' }}>
-                  {bookings.length === 0 ? 'No bookings found in database' : 'No bookings match your filters'}
+                <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#AAAAAA' }}>
+                  {rides.length === 0 ? 'No rides found' : 'No rides match your filters'}
                 </TableCell>
               </TableRow>
             )}
@@ -313,114 +394,119 @@ export default function Bookings() {
         </Table>
       </TableContainer>
 
-      {/* Booking Details Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#b00000', color: '#fefefefe' }}>
+      {/* Ride Details Dialog */}
+      <Dialog 
+        open={openDialog} 
+        onClose={() => setOpenDialog(false)} 
+        maxWidth="md" 
+        fullWidth
+        PaperProps={{ sx: { bgcolor: '#fefefefe' } }}
+      >
+        <DialogTitle sx={{ bgcolor: darkRed, color: '#fefefefe' }}>
           <Box display="flex" alignItems="center">
-            <DirectionsCar sx={{ mr: 1 }} /> Booking Details: #{selectedBooking?.id}
+            <DirectionsCar sx={{ mr: 1 }} /> Ride Details: #{selectedRide?.id}
           </Box>
         </DialogTitle>
-        {selectedBooking && (
+        {selectedRide && (
           <>
-            <DialogContent dividers sx={{ p: 3, bgcolor: '#fefefefe', color: '#b00000' }}>
-              <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, color: '#b00000' }}>
-                Trip Information
+            <DialogContent dividers sx={{ p: 3, bgcolor: '#fefefefe', color: darkRed }}>
+              <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, color: darkRed }}>
+                Ride Information
               </Typography>
               
-              {/* Booking details grid layout */}
+              {/* Google Maps Navigation */}
+              <Box sx={{ mb: 3 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<Directions />}
+                  onClick={() => trackRide(selectedRide)}
+                  sx={{ 
+                    bgcolor: '#1976d2', 
+                    color: '#fff',
+                    '&:hover': { bgcolor: '#1565c0' }
+                  }}
+                  disabled={!selectedRide.pickupCoords || !selectedRide.dropoffCoords}
+                >
+                  Track Ride on Google Maps
+                </Button>
+                {selectedRide.pickupCoords && selectedRide.dropoffCoords && (
+                  <Typography variant="body2" sx={{ mt: 1, color: '#666' }}>
+                    Coordinates: From ({selectedRide.pickupCoords.latitude}, {selectedRide.pickupCoords.longitude}) 
+                    to ({selectedRide.dropoffCoords.latitude}, {selectedRide.dropoffCoords.longitude})
+                  </Typography>
+                )}
+              </Box>
+
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <Typography>
-                    <Box display="flex" alignItems="center">
-                      <Person sx={{ mr: 1, color: '#c5a34f' }} />
-                      <strong>Passenger:</strong> {selectedBooking.customer}
-                    </Box>
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography>
-                    <Box display="flex" alignItems="center">
-                      <Phone sx={{ mr: 1, color: '#c5a34f' }} />
-                      <strong>Phone:</strong> {selectedBooking.phone}
-                    </Box>
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography>
-                    <Box display="flex" alignItems="center">
-                      <Email sx={{ mr: 1, color: '#c5a34f' }} />
-                      <strong>Email:</strong> {selectedBooking.email}
-                    </Box>
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography>
-                    <Box display="flex" alignItems="center">
-                      <Person sx={{ mr: 1, color: '#c5a34f' }} />
-                      <strong>Driver:</strong> {selectedBooking.driver}
-                    </Box>
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography>
-                    <Box display="flex" alignItems="center">
-                      <LocationOn sx={{ mr: 1, color: '#c5a34f' }} />
-                      <strong>Pickup:</strong> {selectedBooking.pickup}
-                    </Box>
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography>
-                    <Box display="flex" alignItems="center">
-                      <LocationOn sx={{ mr: 1, color: '#c5a34f' }} />
-                      <strong>Destination:</strong> {selectedBooking.destination}
-                    </Box>
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography>
-                    <Box display="flex" alignItems="center">
-                      <DirectionsCar sx={{ mr: 1, color: '#c5a34f' }} />
-                      <strong>Vehicle Type:</strong> {selectedBooking.vehicle}
-                    </Box>
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography>
-                    <Box display="flex" alignItems="center">
-                      <Payment sx={{ mr: 1, color: '#c5a34f' }} />
-                      <strong>Payment Method:</strong> {selectedBooking.paymentMethod}
-                    </Box>
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography><strong>Date Created:</strong> {selectedBooking.date}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography><strong>Amount:</strong> {selectedBooking.amount}</Typography>
-                </Grid>
+                {/* Customer Information */}
                 <Grid item xs={12}>
+                  <Typography variant="subtitle1" sx={{ mb: 1, color: darkRed }}>
+                    <Person sx={{ mr: 1, verticalAlign: 'middle' }} /> Customer Details
+                  </Typography>
                   <Typography>
-                    <Box display="flex" alignItems="center">
-                      <strong>Status:</strong> 
-                      <Chip
-                        label={selectedBooking.status}
-                        size="small"
-                        sx={{ ml: 1 }}
-                        color={statusColors[selectedBooking.status]}
-                        icon={statusIcons[selectedBooking.status]}
-                      />
-                    </Box>
+                    <strong>Customer ID:</strong> {selectedRide.customerId}
                   </Typography>
                 </Grid>
+
+                {/* Ride Locations */}
                 <Grid item xs={12}>
-                  <Typography><strong>Notes:</strong> {selectedBooking.notes}</Typography>
+                  <Typography variant="subtitle1" sx={{ mb: 1, color: darkRed }}>
+                    <LocationOn sx={{ mr: 1, verticalAlign: 'middle' }} /> Locations
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <strong>Pickup:</strong> {selectedRide.pickup}
+                  </Typography>
+                  {selectedRide.pickupCoords && (
+                    <Typography variant="body2" sx={{ color: '#666' }}>
+                      Coordinates: {selectedRide.pickupCoords.latitude}, {selectedRide.pickupCoords.longitude}
+                    </Typography>
+                  )}
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <strong>Dropoff:</strong> {selectedRide.dropoff}
+                  </Typography>
+                  {selectedRide.dropoffCoords && (
+                    <Typography variant="body2" sx={{ color: '#666' }}>
+                      Coordinates: {selectedRide.dropoffCoords.latitude}, {selectedRide.dropoffCoords.longitude}
+                    </Typography>
+                  )}
+                </Grid>
+
+                {/* Timing Information */}
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" sx={{ mb: 1, color: darkRed }}>
+                    <AccessTime sx={{ mr: 1, verticalAlign: 'middle' }} /> Timing
+                  </Typography>
+                  <Typography>
+                    <strong>Timestamp:</strong> {selectedRide.timestamp}
+                  </Typography>
+                </Grid>
+
+                {/* Status */}
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" sx={{ mb: 1, color: darkRed }}>
+                    Status
+                  </Typography>
+                  <Chip
+                    label={selectedRide.status.replace(/_/g, ' ')}
+                    size="medium"
+                    color={statusColors[selectedRide.status]}
+                    icon={statusIcons[selectedRide.status]}
+                    sx={{ 
+                      borderColor: '#c5a34f',
+                      color: '#c5a34f'
+                    }}
+                  />
                 </Grid>
               </Grid>
             </DialogContent>
-            {/* Dialog action buttons based on booking status */}
+
+            {/* Dialog action buttons */}
             <DialogActions sx={{ p: 2 }}>
-              {selectedBooking.status === 'Pending' && (
+              {selectedRide.status === 'pending' && (
                 <>
                   <Button
                     variant="contained"
@@ -429,38 +515,79 @@ export default function Bookings() {
                       color: '#000',
                       '&:hover': { bgcolor: '#e6c200' }
                     }}
-                    onClick={() => handleStatusChange('In Progress')}
+                    onClick={() => handleStatusChange('accepted')}
                     disabled={loading}
                     startIcon={<CheckCircle />}
                   >
-                    Approve Trip
+                    Accept Ride
                   </Button>
                   <Button
                     variant="outlined"
                     color="error"
-                    onClick={() => handleStatusChange('Cancelled')}
+                    onClick={() => handleStatusChange('cancelled')}
                     disabled={loading}
                     startIcon={<Cancel />}
                   >
-                    Reject Trip
+                    Reject Ride
                   </Button>
                 </>
               )}
-              {selectedBooking.status === 'In Progress' && (
+
+              {selectedRide.status === 'accepted' && (
+                <>
+                  <Button
+                    variant="contained"
+                    sx={{
+                      bgcolor: '#c5a34f',
+                      color: '#000',
+                      '&:hover': { bgcolor: '#e6c200' }
+                    }}
+                    onClick={() => handleStatusChange('on_the_way')}
+                    disabled={loading}
+                    startIcon={<DirectionsCar />}
+                  >
+                    Start Ride
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() => handleStatusChange('cancelled')}
+                    disabled={loading}
+                    startIcon={<Cancel />}
+                  >
+                    Cancel Ride
+                  </Button>
+                </>
+              )}
+              
+              {selectedRide.status === 'on_the_way' && (
+                <Button
+                  variant="contained"
+                  color="info"
+                  onClick={() => handleStatusChange('arrived')}
+                  disabled={loading}
+                  startIcon={<LocationOn />}
+                >
+                  Mark as Arrived
+                </Button>
+              )}
+              
+              {selectedRide.status === 'arrived' && (
                 <Button
                   variant="contained"
                   color="success"
-                  onClick={() => handleStatusChange('Completed')}
+                  onClick={() => handleStatusChange('completed')}
                   disabled={loading}
                   startIcon={<CheckCircle />}
                 >
-                  Mark as Completed
+                  Complete Ride
                 </Button>
               )}
+              
               <Button 
                 variant="outlined" 
                 onClick={() => setOpenDialog(false)}
-                sx={{ color: '#b00000', borderColor: '#b00000' }}
+                sx={{ color: darkRed, borderColor: darkRed }}
               >
                 Close
               </Button>

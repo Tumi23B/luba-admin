@@ -47,7 +47,7 @@ const GoldButton = styled(Button)(({ theme }) => ({
 const navItems = [
   { name: 'Dashboard', path: '/', icon: <DashboardIcon sx={{ color: '#b80000' }} /> },
   { name: 'Drivers', path: '/drivers', icon: <PeopleIcon sx={{ color: '#b80000' }} /> },
-  { name: 'Jobs', path: '/jobs', icon: <WorkIcon sx={{ color: '#b80000' }} /> },
+  { name: 'Active Drivers', path: '/jobs', icon: <WorkIcon sx={{ color: '#b80000' }} /> },
   { name: 'Bookings', path: '/bookings', icon: <BookIcon sx={{ color: '#b80000' }} /> },
 ];
 

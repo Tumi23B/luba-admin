@@ -2,46 +2,37 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Typography, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper,
   Button, Box, Chip, TextField, InputAdornment, Menu, MenuItem,
-  Divider, Badge, Dialog, DialogTitle, DialogContent, DialogActions, Grid
+  Divider, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Avatar, List, ListItem, ListItemText,
+  Snackbar, Alert
 } from '@mui/material';
 import {
   Search, FilterList, CheckCircle, PendingActions, Cancel,
-  Add, ArrowDownward, ArrowUpward, Email, Phone, Person, Description, DirectionsCar as DirectionsCarIcon
+  Add, ArrowDownward, ArrowUpward, Email, Phone, Person, Description, DirectionsCar as DirectionsCarIcon,
+  People as PeopleIcon
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
-import { ref, onValue, update, push } from 'firebase/database';
+import { ref, onValue, update, push, set } from 'firebase/database';
 
-/**
- * Drivers Component - Main component for managing driver applications and approvals
- * Features:
- * - View all driver applications
- * - Filter and search drivers
- * - Approve/Reject applications
- * - Add new drivers manually
- * - View driver details
- */
 export default function Drivers() {
-  // Router hooks for navigation and params
-  const { driverId } = useParams(); // Get driver ID from URL if present
-  const navigate = useNavigate(); // Navigation function
-  console.log('Navigating to Dashboard...');
-
+  const { driverId } = useParams();
+  const navigate = useNavigate();
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // State management
-  const [drivers, setDrivers] = useState([]); // List of all drivers
-  const [selectedDriver, setSelectedDriver] = useState(null); // Currently selected driver
-  const [openDialog, setOpenDialog] = useState(false); // Controls detail dialog visibility
-  const [openAddDialog, setOpenAddDialog] = useState(false); // Controls add driver dialog visibility
-  const [searchTerm, setSearchTerm] = useState(''); // Search term for filtering
-  const [filterStatus, setFilterStatus] = useState('All'); // Current status filter
-  const [anchorEl, setAnchorEl] = useState(null); // Anchor for filter menu
-  const [sortConfig, setSortConfig] = useState({ // Current sort configuration
+  const [drivers, setDrivers] = useState([]);
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [sortConfig, setSortConfig] = useState({
     key: 'name',
     direction: 'ascending'
   });
-  const [loadingAction, setLoadingAction] = useState(false); // Loading state for actions
-  const [newDriver, setNewDriver] = useState({ // State for new driver form
+  const [loadingAction, setLoadingAction] = useState(false);
+  const [newDriver, setNewDriver] = useState({
     fullName: '',
     email: '',
     phoneNumber: '',
@@ -49,142 +40,210 @@ export default function Drivers() {
     address: '',
     vehicleType: '',
     registration: '',
+    helperCount: 0,
     status: 'Approved'
   });
   const [showClearDialog, setShowClearDialog] = useState(false);
-
-
-  // Fetch drivers data from Firebase
-  useEffect(() => {
-  // If driverId is in URL, fetch that specific driver
-  if (driverId) {
-    const driverRef = ref(db, `driverApplications/${driverId}`);
-    onValue(driverRef, (snapshot) => {
-      const data = snapshot.val();
-      const userRef = ref(db, `users/${driverId}`);
-      onValue(userRef, (userSnap) => {
-        const userInfo = userSnap.val() || {};
-
-        if (data) {
-          setSelectedDriver({
-            id: driverId,
-            name: data.fullName || 'N/A',
-            email: userInfo.email || data.email || 'N/A',
-            phone: userInfo.phoneNumber || data.phoneNumber || 'N/A',
-            status: data.status || 'Pending',
-            idNumber: data.idNumber || 'N/A',
-            address: data.address || 'N/A',
-            vehicle: data.vehicleType || 'N/A',
-            registration: data.registration || 'N/A',
-            joinDate: data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'N/A',
-            images: data.images || {}
-          });
-          setOpenDialog(true);
-        }
-      });
-    });
-  }
-
-  // Fetch all driver applications
-  const driversRef = ref(db, 'driverApplications');
-  onValue(driversRef, (snapshot) => {
-    const driversData = [];
-
-    snapshot.forEach((childSnapshot) => {
-      const driverId = childSnapshot.key;
-      const driver = childSnapshot.val();
-
-      const userRef = ref(db, `users/${driverId}`);
-      onValue(userRef, (userSnap) => {
-        const userInfo = userSnap.val() || {};
-
-        driversData.push({
-          id: driverId,
-          name: driver.fullName || 'N/A',
-          email: userInfo.email || driver.email || 'N/A',
-          phone: userInfo.phoneNumber || driver.phoneNumber || 'N/A',
-          status: driver.status || 'Pending',
-          idNumber: driver.idNumber || 'N/A',
-          address: driver.address || 'N/A',
-          vehicle: driver.vehicleType || 'N/A',
-          registration: driver.registration || 'N/A',
-          joinDate: driver.createdAt ? new Date(driver.createdAt).toLocaleDateString() : 'N/A',
-          images: driver.images || {}
-        });
-
-        // Refresh list after each entry
-        setDrivers([...driversData]);
-      });
-    });
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
   });
-}, [driverId]);
 
-  // Dialog handlers
+  // Enhanced driver data fetching with refresh capability
+  useEffect(() => {
+    const fetchDrivers = () => {
+      if (driverId) {
+        const driverRef = ref(db, `driverApplications/${driverId}`);
+        onValue(driverRef, (snapshot) => {
+          const data = snapshot.val();
+          const userRef = ref(db, `users/${driverId}`);
+          onValue(userRef, (userSnap) => {
+            const userInfo = userSnap.val() || {};
+            if (data) {
+              setSelectedDriver({
+                id: driverId,
+                name: data.fullName || 'N/A',
+                email: userInfo.email || data.email || 'N/A',
+                phone: userInfo.phoneNumber || data.phoneNumber || 'N/A',
+                status: data.status || 'Pending',
+                idNumber: data.idNumber || 'N/A',
+                address: data.address || 'N/A',
+                vehicle: data.vehicleType || 'N/A',
+                registration: data.registration || 'N/A',
+                helperCount: data.helperCount || 0,
+                joinDate: data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'N/A',
+                images: data.images || {}
+              });
+              setOpenDialog(true);
+            }
+          });
+        });
+      }
+
+      const driversRef = ref(db, 'driverApplications');
+      onValue(driversRef, (snapshot) => {
+        const driversData = [];
+        snapshot.forEach((childSnapshot) => {
+          const driverId = childSnapshot.key;
+          const driver = childSnapshot.val();
+          const userRef = ref(db, `users/${driverId}`);
+          
+          onValue(userRef, (userSnap) => {
+            const userInfo = userSnap.val() || {};
+            driversData.push({
+              id: driverId,
+              name: driver.fullName || 'N/A',
+              email: userInfo.email || driver.email || 'N/A',
+              phone: userInfo.phoneNumber || driver.phoneNumber || 'N/A',
+              status: driver.status || 'Pending',
+              idNumber: driver.idNumber || 'N/A',
+              address: driver.address || 'N/A',
+              vehicle: driver.vehicleType || 'N/A',
+              registration: driver.registration || 'N/A',
+              helperCount: driver.helperCount || 0,
+              joinDate: driver.createdAt ? new Date(driver.createdAt).toLocaleDateString() : 'N/A',
+              images: driver.images || {}
+            });
+            setDrivers([...driversData]);
+          });
+        });
+      });
+    };
+
+    fetchDrivers();
+  }, [driverId, refreshKey]);
+
   const handleOpenDialog = (driver) => {
     setSelectedDriver(driver);
     setOpenDialog(true);
   };
 
- const handleCloseDialog = () => {
-  setOpenDialog(false); // Just close the dialog, stay on the same screen
-};
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+  };
 
-  /**
-   * Approve a driver application
-   * - Updates status in driverApplications
-   * - Creates entry in approved drivers collection
-   */
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
   const handleApprove = async () => {
-  if (!selectedDriver) return;
-  setLoadingAction(true);
-  try {
-    await update(ref(db, `driverApplications/${selectedDriver.id}`), { status: 'Approved' });
-    await update(ref(db, `drivers/${selectedDriver.id}`), {
-      fullName: selectedDriver.name,
-      email: selectedDriver.email,
-      phoneNumber: selectedDriver.phone,
-      idNumber: selectedDriver.idNumber,
-      address: selectedDriver.address,
-      status: 'Approved',
-      vehicleType: selectedDriver.vehicle,
-      registration: selectedDriver.registration,
-      createdAt: new Date().toISOString()
-    });
+    if (!selectedDriver) return;
+    setLoadingAction(true);
+    try {
+      // Update all necessary nodes in Firebase
+      const updates = {};
+      updates[`driverApplications/${selectedDriver.id}/status`] = 'Approved';
+      
+      // Create driver record with all necessary data
+      updates[`drivers/${selectedDriver.id}`] = {
+        fullName: selectedDriver.name,
+        email: selectedDriver.email,
+        phoneNumber: selectedDriver.phone,
+        idNumber: selectedDriver.idNumber,
+        address: selectedDriver.address,
+        status: 'Approved',
+        vehicleType: selectedDriver.vehicle,
+        registration: selectedDriver.registration,
+        helperCount: selectedDriver.helperCount || 0,
+        createdAt: new Date().toISOString(),
+        profileImage: selectedDriver.images?.driver || '',
+        licenseImage: selectedDriver.images?.license || '',
+        vehicleImage: selectedDriver.images?.car || '',
+        idImage: selectedDriver.images?.id || ''
+      };
 
-    alert('Application approved!');
-    navigate('/dashboard');
-  } finally {
-    setLoadingAction(false);
-  }
-};
+      // Initialize driver status for dashboard access
+      updates[`driverStatus/${selectedDriver.id}`] = {
+        isOnline: false,
+        timestamp: Date.now(),
+        location: null,
+        status: 'available'
+      };
 
-  /**
-   * Reject a driver application
-   * - Updates status in driverApplications
-   */
+      // Create user role for dashboard access
+      updates[`users/${selectedDriver.id}/roles`] = {
+        driver: true
+      };
+
+      // Perform all updates as a single transaction
+      await update(ref(db), updates);
+
+      setSnackbar({
+        open: true,
+        message: 'Driver approved successfully!',
+        severity: 'success'
+      });
+
+      // Close the dialog
+      setOpenDialog(false);
+      setRefreshKey(prev => prev + 1);
+
+      // Notify driver that they've been approved (optional)
+      await set(ref(db, `notifications/${selectedDriver.id}/${Date.now()}`), {
+        message: 'Your driver application has been approved!',
+        read: false,
+        timestamp: Date.now(),
+        type: 'approval'
+      });
+
+    } catch (error) {
+      console.error("Approval error:", error);
+      setSnackbar({
+        open: true,
+        message: 'Error approving driver',
+        severity: 'error'
+      });
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
   const handleReject = async () => {
-  if (!selectedDriver) return;
-  setLoadingAction(true);
-  try {
-    await update(ref(db, `driverApplications/${selectedDriver.id}`), { status: 'Rejected' });
+    if (!selectedDriver) return;
+    setLoadingAction(true);
+    try {
+      await update(ref(db, `driverApplications/${selectedDriver.id}`), { 
+        status: 'Rejected',
+        rejectedAt: new Date().toISOString()
+      });
+      
+      // Notify driver that they've been rejected
+      await set(ref(db, `notifications/${selectedDriver.id}/${Date.now()}`), {
+        message: 'Your driver application has been rejected.',
+        read: false,
+        timestamp: Date.now(),
+        type: 'rejection'
+      });
+      
+      setSnackbar({
+        open: true,
+        message: 'Application rejected successfully!',
+        severity: 'success'
+      });
+      
+      setOpenDialog(false);
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      console.error("Rejection error:", error);
+      setSnackbar({
+        open: true,
+        message: 'Error rejecting application',
+        severity: 'error'
+      });
+    } finally {
+      setLoadingAction(false);
+    }
+  };
 
-    alert('Application rejected!');
-    navigate('/dashboard');
-  } finally {
-    setLoadingAction(false);
-  }
-};
-
-
-  // Search and filter handlers
+  // Search, filter, and sort handlers
   const handleSearchChange = (event) => setSearchTerm(event.target.value);
   const handleFilterClick = (event) => setAnchorEl(event.currentTarget);
   const handleFilterClose = (status) => {
     setAnchorEl(null);
-    if (status) setFilterStatus(status); // Update filter if status was selected
+    if (status) setFilterStatus(status);
   };
 
-  // Sorting handler
   const handleRequestSort = (property) => {
     const isAsc = sortConfig.key === property && sortConfig.direction === 'ascending';
     setSortConfig({ 
@@ -193,7 +252,6 @@ export default function Drivers() {
     });
   };
 
-  // Add new driver handlers
   const handleAddDriver = () => {
     setOpenAddDialog(true);
   };
@@ -206,32 +264,39 @@ export default function Drivers() {
     }));
   };
 
-  // Clear all drivers handler
   const handleClearAllDrivers = async () => {
-  setLoadingAction(true);
-  try {
-    await update(ref(db), { driverApplications: null }); // Clear entire node
-    setDrivers([]); // Clear UI table
-    setShowClearDialog(false);
-  } catch (error) {
-    console.error('Error clearing driverApplications:', error);
-  } finally {
-    setLoadingAction(false);
-  }
-};
+    setLoadingAction(true);
+    try {
+      await update(ref(db), { driverApplications: null });
+      setDrivers([]);
+      setShowClearDialog(false);
+      setRefreshKey(prev => prev + 1);
+      setSnackbar({
+        open: true,
+        message: 'All driver applications cleared successfully!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error clearing driverApplications:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error clearing driver applications',
+        severity: 'error'
+      });
+    } finally {
+      setLoadingAction(false);
+    }
+  };
 
-
-  /**
-   * Save new driver to database
-   * - Validates all required fields
-   * - Adds to both driverApplications and drivers collections
-   */
   const handleSaveNewDriver = async () => {
-    // Validate all fields
     if (!newDriver.fullName || !newDriver.email || !newDriver.phoneNumber || 
         !newDriver.idNumber || !newDriver.address || !newDriver.vehicleType || 
         !newDriver.registration) {
-      alert('Please fill in all required fields');
+      setSnackbar({
+        open: true,
+        message: 'Please fill in all required fields',
+        severity: 'warning'
+      });
       return;
     }
 
@@ -240,19 +305,42 @@ export default function Drivers() {
       const newDriverRef = ref(db, 'driverApplications');
       const newDriverKey = push(newDriverRef).key;
       
-      // Add to applications
-      await update(ref(db, `driverApplications/${newDriverKey}`), {
+      const updates = {};
+      updates[`driverApplications/${newDriverKey}`] = {
         ...newDriver,
-        createdAt: new Date().toISOString()
-      });
+        createdAt: new Date().toISOString(),
+        status: 'Approved'
+      };
       
-      // Also add to approved drivers
-      await update(ref(db, `drivers/${newDriverKey}`), {
+      updates[`drivers/${newDriverKey}`] = {
         ...newDriver,
+        createdAt: new Date().toISOString(),
+        status: 'Approved',
+        rating: 0,
+        tripsCompleted: 0
+      };
+
+      // Initialize status for new driver
+      updates[`driverStatus/${newDriverKey}`] = {
+        isOnline: false,
+        timestamp: Date.now(),
+        status: 'available'
+      };
+
+      // Set user role
+      updates[`users/${newDriverKey}/roles`] = {
+        driver: true
+      };
+
+      // Create user account
+      updates[`users/${newDriverKey}`] = {
+        email: newDriver.email,
+        phoneNumber: newDriver.phoneNumber,
         createdAt: new Date().toISOString()
-      });
-      
-      // Reset form and close dialog
+      };
+
+      await update(ref(db), updates);
+
       setOpenAddDialog(false);
       setNewDriver({
         fullName: '',
@@ -262,16 +350,28 @@ export default function Drivers() {
         address: '',
         vehicleType: '',
         registration: '',
+        helperCount: 0,
         status: 'Approved'
+      });
+      setRefreshKey(prev => prev + 1);
+      setSnackbar({
+        open: true,
+        message: 'New driver added successfully!',
+        severity: 'success'
       });
     } catch (error) {
       console.error('Error adding driver:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error adding new driver',
+        severity: 'error'
+      });
     } finally {
       setLoadingAction(false);
     }
   };
 
-  // Memoized sorted and filtered drivers for performance optimization
+  // Memoized sorted and filtered drivers
   const sortedDrivers = useMemo(() => {
     return [...drivers].sort((a, b) => {
       if (a[sortConfig.key] < b[sortConfig.key]) {
@@ -301,14 +401,28 @@ export default function Drivers() {
 
   return (
     <Box sx={{ p: 3, bgcolor: '#fefefefe', minHeight: '100vh', color: '#c5a34f' }}>
-      {/* Page Header */}
+      {/* Snackbar for showing messages */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+
       <Typography variant="h4" fontWeight="bold" sx={{ mb: 3, color: '#b00000' }}>
         Driver Management
       </Typography>
 
       {/* Search and Filter Controls */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap' }}>
-        {/* Search Input */}
         <TextField
           label="Search Drivers"
           variant="outlined"
@@ -336,7 +450,6 @@ export default function Drivers() {
         />
 
         <Box>
-          {/* Status Filter Dropdown */}
           <Button
             variant="outlined"
             onClick={handleFilterClick}
@@ -360,7 +473,6 @@ export default function Drivers() {
             <MenuItem onClick={() => handleFilterClose('Rejected')}>Rejected</MenuItem>
           </Menu>
 
-          {/* Add New Driver Button */}
           <Button
             variant="contained"
             startIcon={<Add />}
@@ -373,18 +485,18 @@ export default function Drivers() {
             Add Driver
           </Button>
           <Button
-              variant="outlined"
-              color="error"
-              onClick={() => setShowClearDialog(true)}
-              sx={{
-                ml: 2,
-                borderColor: '#b00000',
-                color: '#b00000',
-                '&:hover': { bgcolor: '#b00000', color: '#fff' }
-              }}
-            >
-              Clear Table
-            </Button>
+            variant="outlined"
+            color="error"
+            onClick={() => setShowClearDialog(true)}
+            sx={{
+              ml: 2,
+              borderColor: '#b00000',
+              color: '#b00000',
+              '&:hover': { bgcolor: '#b00000', color: '#fff' }
+            }}
+          >
+            Clear Table
+          </Button>
         </Box>
       </Box>
 
@@ -396,15 +508,14 @@ export default function Drivers() {
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: '#000000' }}>
-              {/* Table Headers with sort indicators */}
               {[
                 { key: 'name', label: 'Driver Name' },
                 { key: 'email', label: 'Email' },
                 { key: 'phone', label: 'Phone' },
                 { key: 'idNumber', label: 'ID Number' },
-                { key: 'address', label: 'Address' },
                 { key: 'status', label: 'Status' },
                 { key: 'vehicle', label: 'Vehicle' },
+                { key: 'helperCount', label: 'Helpers' },
                 { key: 'joinDate', label: 'Join Date' },
                 { key: 'actions', label: 'Actions' }
               ].map((headCell) => (
@@ -424,29 +535,24 @@ export default function Drivers() {
             </TableRow>
           </TableHead>
           
-          {/* Table Body with driver data */}
           <TableBody>
             {filteredDrivers.length > 0 ? (
               filteredDrivers.map((driver) => (
                 <TableRow key={driver.id} hover>
                   <TableCell sx={{ color: '#b00000' }}>{driver.name}</TableCell>
-
                   <TableCell sx={{ color: '#b00000' }}>
                     <Box display="flex" alignItems="center">
                       <Email sx={{ mr: 1, fontSize: '1rem', color: '#c5a34f' }} />
                       {driver.email !== 'N/A' ? driver.email : <em style={{ color: '#888' }}>Not provided</em>}
                     </Box>
                   </TableCell>
-
                   <TableCell sx={{ color: '#b00000' }}>
                     <Box display="flex" alignItems="center">
                       <Phone sx={{ mr: 1, fontSize: '1rem', color: '#c5a34f' }} />
                       {driver.phone !== 'N/A' ? driver.phone : <em style={{ color: '#888' }}>Not provided</em>}
                     </Box>
                   </TableCell>
-
                   <TableCell sx={{ color: '#b00000' }}>{driver.idNumber}</TableCell>
-                  <TableCell sx={{ color: '#b00000' }}>{driver.address}</TableCell>
                   <TableCell>
                     <Chip
                       label={driver.status}
@@ -470,9 +576,14 @@ export default function Drivers() {
                       {driver.vehicle}
                     </Box>
                   </TableCell>
+                  <TableCell sx={{ color: '#b00000' }}>
+                    <Box display="flex" alignItems="center">
+                      <PeopleIcon sx={{ mr: 1, fontSize: '1rem', color: '#c5a34f' }} />
+                      {driver.helperCount}
+                    </Box>
+                  </TableCell>
                   <TableCell sx={{ color: '#b00000' }}>{driver.joinDate}</TableCell>
                   <TableCell>
-                    {/* Action Buttons */}
                     <Button
                       size="small"
                       variant="outlined"
@@ -485,7 +596,6 @@ export default function Drivers() {
                       View
                     </Button>
                     
-                    {/* Show Approve/Reject only for pending applications */}
                     {driver.status === 'Pending' && (
                       <>
                         <Button
@@ -495,7 +605,10 @@ export default function Drivers() {
                             mr: 1, bgcolor: 'success.main', color: '#fff',
                             '&:hover': { bgcolor: 'success.dark' }
                           }}
-                          onClick={() => handleApprove(driver)}
+                          onClick={() => {
+                            setSelectedDriver(driver);
+                            handleApprove();
+                          }}
                           disabled={loadingAction}
                         >
                           Approve
@@ -507,7 +620,10 @@ export default function Drivers() {
                             bgcolor: 'error.main', color: '#fff',
                             '&:hover': { bgcolor: 'error.dark' }
                           }}
-                          onClick={() => handleReject(driver)}
+                          onClick={() => {
+                            setSelectedDriver(driver);
+                            handleReject();
+                          }}
                           disabled={loadingAction}
                         >
                           Reject
@@ -539,7 +655,6 @@ export default function Drivers() {
         {selectedDriver && (
           <>
             <DialogContent dividers sx={{ p: 3, bgcolor: '#fefefefe', color: '#b00000' }}>
-              {/* Display driver images if available */}
               <Grid container spacing={3}>
                 {selectedDriver.images?.driver && (
                   <Grid item xs={12} md={6}>
@@ -604,7 +719,6 @@ export default function Drivers() {
 
               <Divider sx={{ my: 3 }} />
 
-              {/* Driver Information Section */}
               <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, color: '#b00000' }}>
                 Driver Information
               </Typography>
@@ -613,7 +727,6 @@ export default function Drivers() {
                 <Grid item xs={12} sm={6}>
                   <Typography><strong>Full Name:</strong> {selectedDriver.name}</Typography>
                 </Grid>
-
                 <Grid item xs={12} sm={6}>
                   <Typography>
                     <Box display="flex" alignItems="center">
@@ -622,7 +735,6 @@ export default function Drivers() {
                     </Box>
                   </Typography>
                 </Grid>
-
                 <Grid item xs={12} sm={6}>
                   <Typography>
                     <Box display="flex" alignItems="center">
@@ -631,7 +743,6 @@ export default function Drivers() {
                     </Box>
                   </Typography>
                 </Grid>
-
                 <Grid item xs={12} sm={6}>
                   <Typography>
                     <Box display="flex" alignItems="center">
@@ -653,6 +764,14 @@ export default function Drivers() {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Typography><strong>Registration:</strong> {selectedDriver.registration}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <PeopleIcon sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Helpers:</strong> {selectedDriver.helperCount}
+                    </Box>
+                  </Typography>
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Typography><strong>Join Date:</strong> {selectedDriver.joinDate}</Typography>
@@ -677,7 +796,6 @@ export default function Drivers() {
               </Grid>
             </DialogContent>
 
-            {/* Dialog Action Buttons */}
             <DialogActions sx={{ p: 2 }}>
               {selectedDriver.status === 'Pending' && (
                 <>
@@ -787,6 +905,17 @@ export default function Drivers() {
                 sx={{ mb: 2 }}
               />
             </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Helpers Count"
+                name="helperCount"
+                type="number"
+                value={newDriver.helperCount}
+                onChange={handleNewDriverChange}
+                sx={{ mb: 2 }}
+              />
+            </Grid>
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
@@ -809,26 +938,26 @@ export default function Drivers() {
       </Dialog>
       
       {/* Clear Table Confirmation Dialog */}
-        <Dialog open={showClearDialog} onClose={() => setShowClearDialog(false)}>
-          <DialogTitle sx={{ bgcolor: '#b00000', color: '#fff' }}>
-            Confirm Clear Table
-          </DialogTitle>
-          <DialogContent sx={{ color: '#c5a34f' }}>
-            Are you sure you want to permanently delete <strong>all driver applications</strong> from the database?
-            This will also clear the entire table view. This action cannot be undone.
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowClearDialog(false)}>Cancel</Button>
-            <Button
-              variant="contained"
-              color="error"
-              onClick={handleClearAllDrivers}
-              disabled={loadingAction}
-            >
-              {loadingAction ? 'Clearing...' : 'Confirm Clear'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+      <Dialog open={showClearDialog} onClose={() => setShowClearDialog(false)}>
+        <DialogTitle sx={{ bgcolor: '#b00000', color: '#fff' }}>
+          Confirm Clear Table
+        </DialogTitle>
+        <DialogContent sx={{ color: '#c5a34f' }}>
+          Are you sure you want to permanently delete <strong>all driver applications</strong> from the database?
+          This will also clear the entire table view. This action cannot be undone.
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowClearDialog(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleClearAllDrivers}
+            disabled={loadingAction}
+          >
+            {loadingAction ? 'Clearing...' : 'Confirm Clear'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

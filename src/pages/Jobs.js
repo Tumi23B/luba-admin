@@ -1,640 +1,492 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Box,
-  Stack,
-  Avatar,
-  Chip,
-  LinearProgress,
-  Paper,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-  Grid,
-  CircularProgress,
-  Alert,
-  TextField
+  Typography, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper,
+  Button, Box, Chip, TextField, InputAdornment, Avatar,
+  Divider, Dialog, DialogTitle, DialogContent, DialogActions, Grid,
+  Tooltip
 } from '@mui/material';
 import {
-  Verified as VerifiedIcon,
-  Email as EmailIcon,
-  OfflineBolt as OnlineIcon,
-  DirectionsCar as VehicleIcon,
-  Star as StarIcon,
-  Assignment as JobIcon,
-  Description as DocumentIcon,
-  Phone as PhoneIcon,
-  Home as AddressIcon,
-  CalendarToday as JoinDateIcon,
-  GpsFixed as LocationIcon,
-  Work as WorkIcon,
-  Schedule as TimeIcon,
-  LocationOn as MapIcon
+  Search, CheckCircle, People as PeopleIcon,
+  Email, Phone, Person, DirectionsCar as DirectionsCarIcon,
+  RadioButtonChecked, Warning, Timer
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { ref, onValue, query, orderByChild, equalTo, limitToLast } from 'firebase/database';
+import { ref, onValue, update } from 'firebase/database';
 
+export default function ActiveDrivers() {
+  const navigate = useNavigate();
 
-
-
-// Configuration for driver status display (icons, colors, labels)
-const statusConfig = {
-  verified: { icon: <VerifiedIcon />, color: 'success', label: 'Verified' },
-  pending: { icon: <VerifiedIcon />, color: 'warning', label: 'Pending Verification' },
-  suspended: { icon: <VerifiedIcon />, color: 'error', label: 'Suspended' },
-  active: { icon: <VerifiedIcon />, color: 'success', label: 'Active' },
-  inactive: { icon: <VerifiedIcon />, color: 'default', label: 'Inactive' }
-};
-
-// Configuration for job status display
-const jobStatusConfig = {
-  pending: { color: 'warning', label: 'Pending' },
-  in_progress: { color: 'info', label: 'In Progress' },
-  completed: { color: 'success', label: 'Completed' },
-  cancelled: { color: 'error', label: 'Cancelled' }
-};
-
-/**
- * DriverCard component - Displays a summary card for a driver
- * @param {Object} driver - Driver data object
- * @param {Function} onClick - Click handler for the card
- */
-const DriverCard = ({ driver, onClick }) => {
-  // Get status configuration based on driver's status
-  const status = statusConfig[driver.status] || statusConfig.pending;
-  // Get current job status if driver has a current job
-  const currentJobStatus = driver.currentJob ? 
-    jobStatusConfig[driver.currentJob.status] || { color: 'default', label: 'Unknown' } 
-    : null;
-
-  return (
-    <Card onClick={onClick} sx={{ 
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      transition: 'all 0.2s ease',
-      '&:hover': {
-        transform: 'translateY(-2px)',
-        boxShadow: 3,
-        cursor: 'pointer'
-      }
-    }}>
-      <CardContent sx={{ flexGrow: 1 }}>
-        {/* Driver profile section with avatar and basic info */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Avatar src={driver.photoURL} sx={{ 
-            width: 56, 
-            height: 56, 
-            bgcolor: '#c5a34f',
-            mr: 2 
-          }}>
-            {driver.name?.charAt(0)}
-          </Avatar>
-          <Box>
-            <Typography variant="subtitle1" fontWeight="bold">
-              {driver.fullname || 'No name'}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-              <Chip
-                icon={status.icon}
-                label={status.label}
-                size="small"
-                color={status.color}
-                sx={{ mr: 1 }}
-              />
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <StarIcon sx={{ color: '#b80000', fontSize: '1rem', mr: 0.5 }} />
-                <Typography variant="body2">{driver.rating?.toFixed(1) || 'N/A'}</Typography>
-              </Box>
-            </Box>
-          </Box>
-        </Box>
-
-        {/* Driver contact and vehicle information */}
-        <Stack spacing={1.5} sx={{ mb: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <EmailIcon sx={{ color: 'text.secondary', mr: 1, fontSize: '1rem' }} />
-            <Typography variant="body2">
-              {driver.email || 'No email'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <PhoneIcon sx={{ color: 'text.secondary', mr: 1, fontSize: '1rem' }} />
-            <Typography variant="body2">
-              {driver.phoneNumber || 'No phone'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <MapIcon sx={{ color: 'text.secondary', mr: 1, fontSize: '1rem' }} />
-            <Typography variant="body2" noWrap>
-              {driver.address || 'No address'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <VehicleIcon sx={{ color: 'text.secondary', mr: 1, fontSize: '1rem' }} />
-            <Typography variant="body2">
-              {driver.vehicleType || 'No vehicle'} ({driver.vehicleRegistration || 'N/A'})
-            </Typography>
-          </Box>
-        </Stack>
-
-        {/* Current job information section */}
-        {driver.currentJob ? (
-          <Paper elevation={0} sx={{ 
-            p: 1.5, 
-            backgroundColor: 'action.hover',
-            borderRadius: 1,
-            borderLeft: `4px solid ${currentJobStatus.color === 'default' ? '#c5a34f' : ''}`
-          }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="subtitle2" fontWeight="bold">
-                Current Job
-              </Typography>
-              <Chip 
-                label={currentJobStatus.label} 
-                size="small" 
-                color={currentJobStatus.color}
-              />
-            </Box>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              {driver.currentJob.description || 'No description'}
-            </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption">
-                {driver.currentJob.client || 'No client'}
-              </Typography>
-              <Typography variant="caption">
-                {driver.currentJob.location || 'No location'}
-              </Typography>
-            </Box>
-            <LinearProgress
-              variant="determinate"
-              value={driver.currentJob.progress || 0}
-              sx={{ height: 6, borderRadius: 3, mt: 1.5 }}
-              color={currentJobStatus.color === 'default' ? 'primary' : currentJobStatus.color}
-            />
-          </Paper>
-        ) : (
-          <Paper elevation={0} sx={{ 
-            p: 1.5, 
-            backgroundColor: 'action.hover',
-            borderRadius: 1
-          }}>
-            <Typography variant="body2" color="text.secondary">
-              No current job assignment
-            </Typography>
-          </Paper>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
-
-/**
- * DriverDetails component - Displays detailed information about a driver in a dialog
- * @param {Object} driver - Driver data object
- * @param {Function} onClose - Function to close the dialog
- */
-const DriverDetails = ({ driver, onClose }) => {
-  const [recentJobs, setRecentJobs] = useState([]);
-  const [loadingJobs, setLoadingJobs] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Fetch recent jobs for the driver when component mounts or driver changes
-  useEffect(() => {
-    if (!driver?.id) return;
-
-    const jobsRef = query(
-      ref(db, 'jobs'),
-      orderByChild('driverId'),
-      equalTo(driver.id),
-      limitToLast(5)
-    );
-
-    const unsubscribe = onValue(jobsRef, (snapshot) => {
-      const jobs = [];
-      snapshot.forEach((child) => {
-        jobs.push({
-          id: child.key,
-          ...child.val()
-        });
-      });
-      setRecentJobs(jobs.sort((a, b) => b.timestamp - a.timestamp));
-      setLoadingJobs(false);
-    });
-
-    return () => unsubscribe();
-  }, [driver?.id]);
-
-  // Filter jobs based on search term
-  const filteredJobs = recentJobs.filter(job =>
-    job.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.client?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.status?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const status = statusConfig[driver.status] || statusConfig.pending;
-
-  return (
-    <Dialog open fullWidth maxWidth="md" onClose={onClose}>
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          Driver Details
-          <Chip
-            icon={status.icon}
-            label={status.label}
-            color={status.color}
-            size="small"
-            sx={{ ml: 2 }}
-          />
-        </Box>
-        <Button onClick={onClose}>Close</Button>
-      </DialogTitle>
-
-      <DialogContent dividers>
-        <Grid container spacing={3}>
-          {/* Left column - Driver profile and contact info */}
-          <Grid item xs={12} md={4}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
-              <Avatar
-                src={driver.photoURL}
-                sx={{ 
-                  width: 120, 
-                  height: 120, 
-                  mb: 2,
-                  bgcolor: '#c5a34f',
-                  fontSize: '2.5rem'
-                }}
-              >
-                {driver.name?.charAt(0)}
-              </Avatar>
-              <Typography variant="h6" fontWeight="bold" textAlign="center">
-                {driver.name}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" textAlign="center">
-                {driver.driverId || 'ID: N/A'}
-              </Typography>
-            </Box>
-
-            {/* Contact information section */}
-            <Paper elevation={0} sx={{ p: 2, mb: 3, backgroundColor: 'background.paper' }}>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                Contact Information
-              </Typography>
-              <List dense>
-                <ListItem>
-                  <ListItemIcon sx={{ minWidth: 36 }}>
-                    <EmailIcon color="primary" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={driver.email || 'No email'} 
-                    secondary="Email" 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon sx={{ minWidth: 36 }}>
-                    <PhoneIcon color="primary" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={driver.phoneNumber || 'No phone'} 
-                    secondary="Phone" 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon sx={{ minWidth: 36 }}>
-                    <AddressIcon color="primary" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={driver.address || 'No address'} 
-                    secondary="Address" 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon sx={{ minWidth: 36 }}>
-                    <LocationIcon color="primary" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={driver.city ? `${driver.city}, ${driver.country}` : 'No location'} 
-                    secondary="Location" 
-                  />
-                </ListItem>
-              </List>
-            </Paper>
-
-            {/* Vehicle information section */}
-            <Paper elevation={0} sx={{ p: 2, backgroundColor: 'background.paper' }}>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                Vehicle Information
-              </Typography>
-              <List dense>
-                <ListItem>
-                  <ListItemIcon sx={{ minWidth: 36 }}>
-                    <VehicleIcon color="primary" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={driver.vehicleType || 'No vehicle'} 
-                    secondary="Vehicle Type" 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon sx={{ minWidth: 36 }}>
-                    <DocumentIcon color="primary" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={driver.vehicleRegistration || 'N/A'} 
-                    secondary="Registration" 
-                  />
-                </ListItem>
-              </List>
-            </Paper>
-          </Grid>
-
-          {/* Right column - Job information */}
-          <Grid item xs={12} md={8}>
-            {/* Current job details section */}
-            {driver.currentJob && (
-              <Paper elevation={0} sx={{ p: 2, mb: 3, backgroundColor: 'background.paper' }}>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  Current Job Details
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      Job Description
-                    </Typography>
-                    <Typography variant="body1">
-                      {driver.currentJob.description || 'No description'}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      Client
-                    </Typography>
-                    <Typography variant="body1">
-                      {driver.currentJob.client || 'No client'}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      Location
-                    </Typography>
-                    <Typography variant="body1">
-                      {driver.currentJob.location || 'No location'}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      Status
-                    </Typography>
-                    <Chip 
-                      label={jobStatusConfig[driver.currentJob.status]?.label || 'Unknown'} 
-                      color={jobStatusConfig[driver.currentJob.status]?.color || 'default'}
-                      size="small"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Progress
-                    </Typography>
-                    <LinearProgress
-                      variant="determinate"
-                      value={driver.currentJob.progress || 0}
-                      sx={{ height: 8, borderRadius: 4 }}
-                      color={jobStatusConfig[driver.currentJob.status]?.color || 'primary'}
-                    />
-                    <Typography variant="caption" display="block" textAlign="right">
-                      {driver.currentJob.progress || 0}% complete
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </Paper>
-            )}
-
-            {/* Recent job history section with search */}
-            <Paper elevation={0} sx={{ p: 2, backgroundColor: 'background.paper' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="subtitle1" fontWeight="bold">
-                  Recent Job History
-                </Typography>
-                <TextField
-                  size="small"
-                  placeholder="Search jobs..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  sx={{ width: 200 }}
-                />
-              </Box>
-
-              {loadingJobs ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                  <CircularProgress size={24} />
-                </Box>
-              ) : filteredJobs.length > 0 ? (
-                <List dense>
-                  {filteredJobs.map((job) => {
-                    const jobStatus = jobStatusConfig[job.status] || { color: 'default', label: 'Unknown' };
-                    return (
-                      <ListItem key={job.id} divider>
-                        <ListItemIcon sx={{ minWidth: 36 }}>
-                          <WorkIcon color={jobStatus.color} />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={job.description || 'No description'}
-                          secondary={
-                            <>
-                              <Typography component="span" variant="body2" color="text.primary">
-                                {job.client || 'No client'}
-                              </Typography>
-                              {` — ${jobStatus.label} • ${new Date(job.timestamp).toLocaleDateString()}`}
-                            </>
-                          }
-                        />
-                        <Chip
-                          label={`${job.progress || 0}%`}
-                          size="small"
-                          color={jobStatus.color}
-                          variant="outlined"
-                        />
-                      </ListItem>
-                    );
-                  })}
-                </List>
-              ) : (
-                <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>
-                  {searchTerm ? 'No matching jobs found' : 'No job history available'}
-                </Typography>
-              )}
-            </Paper>
-          </Grid>
-        </Grid>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-/**
- * DriverManagement component - Main component for managing and displaying drivers
- */
-const DriverManagement = () => {
+  // State management
   const [drivers, setDrivers] = useState([]);
+  const [activeDrivers, setActiveDrivers] = useState([]);
+  const [driverStatus, setDriverStatus] = useState({});
   const [selectedDriver, setSelectedDriver] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showActiveVehicles, setShowActiveVehicles] = useState(true);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState({
+    key: 'name',
+    direction: 'ascending'
+  });
 
-
-  // Fetch drivers data from Firebase when component mounts
+  // Fetch active drivers data from Firebase
   useEffect(() => {
+    // First fetch all approved drivers with their details
     const driversRef = ref(db, 'drivers');
-    
-    const unsubscribe = onValue(driversRef, (snapshot) => {
-      try {
-        const driversData = [];
-        const promises = [];
-
-        snapshot.forEach((child) => {
-          const driver = {
-            id: child.key,
-            ...child.val()
-          };
-
-          // Fetch current job if exists
-          if (driver.currentJobId) {
-            const promise = new Promise((resolve) => {
-              const jobRef = ref(db, `jobs/${driver.currentJobId}`);
-              onValue(jobRef, (jobSnapshot) => {
-                driver.currentJob = jobSnapshot.val();
-                resolve();
-              }, { onlyOnce: true });
-            });
-            promises.push(promise);
-          }
-
-          driversData.push(driver);
-        });
-
-        // Wait for all job data to be fetched before updating state
-        Promise.all(promises).then(() => {
-          setDrivers(driversData);
-          setLoading(false);
-        });
-      } catch (err) {
-        console.error('Error processing data:', err);
-        setError('Failed to process driver data');
-        setLoading(false);
-      }
-    }, (error) => {
-      console.error('Error fetching drivers:', error);
-      setError('Failed to load drivers');
-      setLoading(false);
+    const unsubscribeDrivers = onValue(driversRef, (snapshot) => {
+      const driversData = [];
+      snapshot.forEach((childSnapshot) => {
+        const driverId = childSnapshot.key;
+        const driver = childSnapshot.val();
+        
+        if (driver.status === 'Approved') {
+          driversData.push({
+            id: driverId,
+            name: driver.fullName || 'N/A',
+            email: driver.email || 'N/A',
+            phone: driver.phoneNumber || 'N/A',
+            status: driver.status || 'Approved',
+            idNumber: driver.idNumber || 'N/A',
+            address: driver.address || 'N/A',
+            vehicle: driver.vehicleType || 'N/A',
+            registration: driver.registration || 'N/A',
+            helperCount: driver.helperCount || 0,
+            profileImage: driver.profileImage || null,
+            joinDate: driver.createdAt ? new Date(driver.createdAt).toLocaleDateString() : 'N/A',
+            images: driver.images || {}
+          });
+        }
+      });
+      setDrivers(driversData);
     });
 
-    return () => unsubscribe();
+    // Then fetch active status from driverStatus
+    const activeDriversRef = ref(db, 'driverStatus');
+    const unsubscribeStatus = onValue(activeDriversRef, (snapshot) => {
+      const statusData = {};
+      const activeDriversData = [];
+      
+      snapshot.forEach((childSnapshot) => {
+        const driverId = childSnapshot.key;
+        const status = childSnapshot.val();
+        statusData[driverId] = status;
+        
+        // Check if driver has been online for more than 20 hours
+        if (status.isOnline) {
+          const now = new Date().getTime();
+          const lastStatusChange = status.lastStatusChange || now;
+          const hoursOnline = (now - lastStatusChange) / (1000 * 60 * 60);
+          
+          if (hoursOnline > 20) {
+            // Force driver offline
+            update(ref(db, `driverStatus/${driverId}`), {
+              isOnline: false,
+              lastStatusChange: now,
+              forcedOffline: true,
+              forcedOfflineReason: 'Exceeded 20 hours of continuous driving'
+            });
+          } else {
+            activeDriversData.push(driverId);
+          }
+        }
+      });
+      
+      setDriverStatus(statusData);
+      setActiveDrivers(activeDriversData);
+    });
+
+    // Cleanup function
+    return () => {
+      unsubscribeDrivers();
+      unsubscribeStatus();
+    };
   }, []);
 
-  // Loading state
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-        <CircularProgress size={60} />
-      </Box>
-    );
-  }
+  // Calculate hours online for a driver
+  const getHoursOnline = (driverId) => {
+    const status = driverStatus[driverId];
+    if (!status || !status.isOnline) return 0;
+    
+    const now = new Date().getTime();
+    const lastStatusChange = status.lastStatusChange || now;
+    return (now - lastStatusChange) / (1000 * 60 * 60);
+  };
 
-  // Error state
-  if (error) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-        <Button 
-          variant="contained" 
-          onClick={() => window.location.reload()}
-        >
-          Retry
-        </Button>
-      </Box>
-    );
-  }
+  // Filter drivers to only those who are active (approved and online)
+  const filteredActiveDrivers = useMemo(() => {
+    return drivers
+      .filter(driver => activeDrivers.includes(driver.id))
+      .map(driver => ({
+        ...driver,
+        hoursOnline: getHoursOnline(driver.id),
+        approachingLimit: getHoursOnline(driver.id) > 18
+      }));
+  }, [drivers, activeDrivers, driverStatus]);
 
-  // Main render
+  // Sorting handler
+  const handleRequestSort = (property) => {
+    const isAsc = sortConfig.key === property && sortConfig.direction === 'ascending';
+    setSortConfig({ 
+      key: property, 
+      direction: isAsc ? 'descending' : 'ascending' 
+    });
+  };
+
+  // Memoized sorted and searched drivers
+  const sortedDrivers = useMemo(() => {
+    return [...filteredActiveDrivers].sort((a, b) => {
+      if (a[sortConfig.key] < b[sortConfig.key]) {
+        return sortConfig.direction === 'ascending' ? -1 : 1;
+      }
+      if (a[sortConfig.key] > b[sortConfig.key]) {
+        return sortConfig.direction === 'ascending' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [filteredActiveDrivers, sortConfig]);
+
+  const searchedDrivers = useMemo(() => {
+    const searchLower = searchTerm.toLowerCase();
+    return sortedDrivers.filter(driver => {
+      return (
+        driver.name.toLowerCase().includes(searchLower) ||
+        driver.email.toLowerCase().includes(searchLower) ||
+        driver.phone.toLowerCase().includes(searchLower) ||
+        driver.vehicle.toLowerCase().includes(searchLower) ||
+        driver.registration.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [sortedDrivers, searchTerm]);
+
+  // Dialog handlers
+  const handleOpenDialog = (driver) => {
+    setSelectedDriver(driver);
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+  };
+
+  // Force a driver offline manually
+  const handleForceOffline = (driverId) => {
+    update(ref(db, `driverStatus/${driverId}`), {
+      isOnline: false,
+      lastStatusChange: new Date().getTime(),
+      forcedOffline: true,
+      forcedOfflineReason: 'Manually taken offline by admin'
+    });
+  };
+
   return (
-    <Box sx={{ p: 3 }}>
-  {/* Header with Clear button */}
-  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-    <Box>
-      <Typography variant="h4" fontWeight="bold" gutterBottom>
-        Driver Job Management
+    <Box sx={{ p: 3, bgcolor: '#fefefefe', minHeight: '100vh', color: '#c5a34f' }}>
+      {/* Page Header */}
+      <Typography variant="h4" fontWeight="bold" sx={{ mb: 3, color: '#b00000' }}>
+        Currently Active Drivers
       </Typography>
-      <Typography variant="body1" color="text.secondary">
-        View and manage driver assignments and job status
-      </Typography>
-    </Box>
-    <Button
-      variant="outlined"
-      color="error"
-      onClick={() => setShowActiveVehicles(false)}
-      sx={{ height: 'fit-content' }}
-    >
-      Clear Active Vehicles
-    </Button>
-  </Box>
 
-  {/* Display drivers list or empty state */}
-  {drivers.length === 0 ? (
-  <Paper elevation={0} sx={{ p: 4, textAlign: 'center' }}>
-    <Typography variant="h6" gutterBottom>
-      No drivers found
-    </Typography>
-    <Typography variant="body2" color="text.secondary">
-      Currently there are no drivers registered in the system
-    </Typography>
-  </Paper>
-) : !showActiveVehicles ? (
-  <Paper elevation={0} sx={{ p: 4, textAlign: 'center' }}>
-    <Typography variant="body2" color="text.secondary" gutterBottom>
-      Active vehicles view cleared
-    </Typography>
-    <Button variant="contained" onClick={() => setShowActiveVehicles(true)}>
-      Restore View
-    </Button>
-  </Paper>
-) : (
-  <Grid container spacing={3}>
-    {drivers.map((driver) => (
-      <Grid item key={driver.id} xs={12} sm={6} md={4} lg={3}>
-        <DriverCard 
-          driver={driver} 
-          onClick={() => setSelectedDriver(driver)} 
+      {/* Search Controls */}
+      <Box sx={{ mb: 3 }}>
+        <TextField
+          label="Search Active Drivers"
+          variant="outlined"
+          size="small"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          sx={{
+            width: { xs: '100%', sm: '48%', md: '30%' },
+            '& .MuiOutlinedInput-root': {
+              '& fieldset': { borderColor: '#c5a34f' },
+              '&:hover fieldset': { borderColor: '#b00000' },
+              '&.Mui-focused fieldset': { borderColor: '#c5a34f' },
+              color: '#c5a34f'
+            },
+            '& .MuiInputLabel-root': { color: '#c5a34f' }
+          }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search sx={{ color: '#b00000' }} />
+              </InputAdornment>
+            ),
+          }}
         />
-      </Grid>
-    ))}
-  </Grid>
-)}
+      </Box>
 
-  {/* Driver details dialog when a driver is selected */}
-  {selectedDriver && (
-    <DriverDetails 
-      driver={selectedDriver} 
-      onClose={() => setSelectedDriver(null)} 
-    />
-  )}
-</Box>
+      {/* Drivers Table */}
+      <TableContainer component={Paper} sx={{
+        borderRadius: 2, border: '1px solid #c5a34f',
+        backgroundColor: '#fefefefe'
+      }}>
+        <Table>
+          <TableHead>
+            <TableRow sx={{ bgcolor: '#000000' }}>
+              {[
+                { key: 'name', label: 'Driver' },
+                { key: 'vehicle', label: 'Vehicle' },
+                { key: 'helperCount', label: 'Helpers' },
+                { key: 'hoursOnline', label: 'Driving Time' },
+                { key: 'status', label: 'Status' },
+                { key: 'actions', label: 'Actions' }
+              ].map((headCell) => (
+                <TableCell
+                  key={headCell.key}
+                  sx={{ color: '#c5a34f', fontWeight: 'bold', cursor: 'pointer' }}
+                  onClick={() => headCell.key !== 'actions' && handleRequestSort(headCell.key)}
+                >
+                  {headCell.label}
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          
+          <TableBody>
+            {searchedDrivers.length > 0 ? (
+              searchedDrivers.map((driver) => (
+                <TableRow key={driver.id} hover sx={{ 
+                  bgcolor: driver.approachingLimit ? 'rgba(255, 165, 0, 0.1)' : 'inherit'
+                }}>
+                  <TableCell sx={{ color: '#b00000' }}>
+                    <Box display="flex" alignItems="center">
+                      {driver.profileImage ? (
+                        <Avatar 
+                          src={driver.profileImage} 
+                          sx={{ mr: 2, width: 40, height: 40 }}
+                        />
+                      ) : (
+                        <Avatar sx={{ mr: 2, width: 40, height: 40 }}>
+                          <Person />
+                        </Avatar>
+                      )}
+                      <Box>
+                        <Typography fontWeight="bold">{driver.name}</Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          {driver.phone}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </TableCell>
 
+                  <TableCell sx={{ color: '#b00000' }}>
+                    <Box display="flex" alignItems="center">
+                      <DirectionsCarIcon sx={{ mr: 1, color: '#c5a34f' }} />
+                      {driver.vehicle} ({driver.registration})
+                    </Box>
+                  </TableCell>
+
+                  <TableCell sx={{ color: '#b00000' }}>
+                    <Box display="flex" alignItems="center">
+                      <PeopleIcon sx={{ mr: 1, color: '#c5a34f' }} />
+                      {driver.helperCount} {driver.helperCount === 1 ? 'Helper' : 'Helpers'}
+                    </Box>
+                  </TableCell>
+
+                  <TableCell sx={{ color: '#b00000' }}>
+                    <Box display="flex" alignItems="center">
+                      <Timer sx={{ mr: 1, color: driver.approachingLimit ? 'orange' : '#c5a34f' }} />
+                      {driver.hoursOnline.toFixed(1)} hours
+                      {driver.approachingLimit && (
+                        <Tooltip title="Approaching 20-hour driving limit">
+                          <Warning color="warning" sx={{ ml: 1 }} />
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </TableCell>
+
+                  <TableCell>
+                    <Chip
+                      label="Active"
+                      size="small"
+                      icon={<RadioButtonChecked fontSize="small" />}
+                      color={driver.approachingLimit ? 'warning' : 'success'}
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  </TableCell>
+
+                  <TableCell>
+                    <Box display="flex" gap={1}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          borderColor: '#c5a34f', 
+                          color: '#c5a34f',
+                          '&:hover': { borderColor: '#b00000', color: '#b00000' }
+                        }}
+                        onClick={() => handleOpenDialog(driver)}
+                      >
+                        Details
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="error"
+                        onClick={() => handleForceOffline(driver.id)}
+                      >
+                        Force Offline
+                      </Button>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={6} align="center" sx={{ color: '#AAAAAA' }}>
+                  No active drivers found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {/* Driver Details Dialog */}
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#b00000', color: '#fefefefe' }}>
+          <Box display="flex" alignItems="center">
+            <Person sx={{ mr: 1 }} /> Driver Details: {selectedDriver?.name}
+          </Box>
+        </DialogTitle>
+        
+        {selectedDriver && (
+          <>
+            <DialogContent dividers sx={{ p: 3, bgcolor: '#fefefefe', color: '#b00000' }}>
+              <Grid container spacing={3}>
+                {selectedDriver.profileImage && (
+                  <Grid item xs={12} md={4}>
+                    <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: '#c5a34f' }}>
+                      Profile Photo:
+                    </Typography>
+                    <Paper elevation={3} sx={{ p: 1, borderRadius: 2, display: 'flex', justifyContent: 'center' }}>
+                      <Avatar 
+                        src={selectedDriver.profileImage} 
+                        sx={{ width: 150, height: 150 }}
+                      />
+                    </Paper>
+                  </Grid>
+                )}
+                
+                {selectedDriver.images?.license && (
+                  <Grid item xs={12} md={4}>
+                    <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: '#c5a34f' }}>
+                      License Photo:
+                    </Typography>
+                    <Paper elevation={3} sx={{ p: 1, borderRadius: 2, display: 'flex', justifyContent: 'center' }}>
+                      <img
+                        src={selectedDriver.images.license}
+                        alt="License"
+                        style={{ maxWidth: '100%', maxHeight: 150, borderRadius: 8 }}
+                      />
+                    </Paper>
+                  </Grid>
+                )}
+                
+                {selectedDriver.images?.car && (
+                  <Grid item xs={12} md={4}>
+                    <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: '#c5a34f' }}>
+                      Vehicle Photo:
+                    </Typography>
+                    <Paper elevation={3} sx={{ p: 1, borderRadius: 2, display: 'flex', justifyContent: 'center' }}>
+                      <img
+                        src={selectedDriver.images.car}
+                        alt="Vehicle"
+                        style={{ maxWidth: '100%', maxHeight: 150, borderRadius: 8 }}
+                      />
+                    </Paper>
+                  </Grid>
+                )}
+              </Grid>
+
+              <Divider sx={{ my: 3 }} />
+
+              <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, color: '#b00000' }}>
+                Driver Information
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <Person sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Full Name:</strong> {selectedDriver.name}
+                    </Box>
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <Email sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Email:</strong> {selectedDriver.email}
+                    </Box>
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <Phone sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Phone:</strong> {selectedDriver.phone}
+                    </Box>
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <DirectionsCarIcon sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Vehicle:</strong> {selectedDriver.vehicle} ({selectedDriver.registration})
+                    </Box>
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <PeopleIcon sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Helpers:</strong> {selectedDriver.helperCount} {selectedDriver.helperCount === 1 ? 'Helper' : 'Helpers'}
+                    </Box>
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography>
+                    <Box display="flex" alignItems="center">
+                      <Timer sx={{ mr: 1, color: '#c5a34f' }} />
+                      <strong>Driving Time:</strong> {selectedDriver.hoursOnline?.toFixed(1) || '0'} hours
+                      {selectedDriver.approachingLimit && (
+                        <Tooltip title="Approaching 20-hour driving limit">
+                          <Warning color="warning" sx={{ ml: 1 }} />
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </Typography>
+                </Grid>
+              </Grid>
+            </DialogContent>
+
+            <DialogActions sx={{ p: 2 }}>
+              <Button 
+                variant="outlined" 
+                onClick={handleCloseDialog}
+                sx={{ color: '#b00000', borderColor: '#b00000' }}
+              >
+                Close
+              </Button>
+              <Button 
+                variant="contained" 
+                color="error"
+                onClick={() => {
+                  handleForceOffline(selectedDriver.id);
+                  handleCloseDialog();
+                }}
+              >
+                Force Offline
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+    </Box>
   );
-};
-
-export default DriverManagement;
+}
